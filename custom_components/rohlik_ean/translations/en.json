@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rohlík EAN",
+        "description": "Adds barcode lookup on top of the Rohlík.cz (rohlikcz) integration. No credentials needed — cart access is handled by HA-RohlikCZ."
+      }
+    },
+    "abort": {
+      "already_configured": "Already configured — only one instance is needed.",
+      "rohlikcz_missing": "The Rohlík.cz (rohlikcz) integration was not found. Install and configure HA-RohlikCZ first."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "confidence_threshold": "Auto-add confidence threshold (0.5–1.0)",
+          "trust_ean_hit": "Trust a single Rohlík fulltext hit for a raw EAN",
+          "notify_unresolved": "Create a persistent notification for unresolved EANs"
+        }
+      }
+    }
+  }
+}

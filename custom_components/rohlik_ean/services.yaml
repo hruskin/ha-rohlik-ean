@@ -1,0 +1,75 @@
+add_by_ean:
+  name: Add by EAN
+  description: >-
+    Resolve an EAN/barcode to a Rohlík.cz product and add it to the cart.
+    Fires rohlik_ean_matched or rohlik_ean_unresolved.
+  fields:
+    ean:
+      name: EAN
+      description: Barcode digits (EAN-8 to GTIN-14)
+      required: true
+      example: "8594001170012"
+      selector:
+        text:
+    quantity:
+      name: Quantity
+      description: How many units to add
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    dry_run:
+      name: Dry run
+      description: Only resolve the product, do not touch the cart
+      default: false
+      selector:
+        boolean:
+
+confirm_match:
+  name: Confirm match
+  description: >-
+    Teach the integration an EAN → product mapping (stores it in the cache)
+    and optionally add the product to the cart.
+  fields:
+    ean:
+      name: EAN
+      required: true
+      example: "8594001170012"
+      selector:
+        text:
+    product_id:
+      name: Product ID
+      description: Rohlík.cz product ID
+      required: true
+      example: 711263
+      selector:
+        number:
+          min: 1
+          mode: box
+    quantity:
+      name: Quantity
+      description: Units to add to the cart (0 = only remember the mapping)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 50
+          mode: box
+    name:
+      name: Product name
+      description: Optional label stored with the mapping
+      selector:
+        text:
+
+forget_ean:
+  name: Forget EAN
+  description: Remove a learned EAN → product mapping from the cache.
+  fields:
+    ean:
+      name: EAN
+      required: true
+      example: "8594001170012"
+      selector:
+        text:

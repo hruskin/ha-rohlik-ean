@@ -1,0 +1,54 @@
+# Actionable notifikace do mobilu, když integrace neví jistě.
+# Nabídne až 3 kandidáty jako tlačítka; tap = potvrzení + přidání do košíku
+# + uložení mapování do cache (příště už se nebude ptát).
+#
+# Nahraď `notify.mobile_app_XXX` svojí notify službou.
+
+automation:
+  - alias: "Rohlík EAN: výběr kandidáta"
+    mode: parallel
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_unresolved
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.candidates | count > 0 }}"
+    action:
+      - service: notify.mobile_app_XXX
+        data:
+          title: "Rohlík: EAN {{ trigger.event.data.ean }}"
+          message: >-
+            {% if trigger.event.data.metadata %}
+            {{ trigger.event.data.metadata.brand }} {{ trigger.event.data.metadata.name }}
+            ({{ trigger.event.data.metadata.quantity }}) — vyber produkt:
+            {% else %}
+            Neznámý kód — vyber produkt:
+            {% endif %}
+          data:
+            actions: >-
+              {% set ns = namespace(actions=[]) %}
+              {% for c in trigger.event.data.candidates[:3] %}
+              {% set ns.actions = ns.actions + [{
+                "action": "ROHLIK_EAN_" ~ trigger.event.data.ean ~ "_" ~ c.id ~ "_" ~ trigger.event.data.quantity,
+                "title": (c.name ~ " (" ~ (c.amount or "?") ~ ")") | truncate(40)
+              }] %}
+              {% endfor %}
+              {{ ns.actions }}
+
+  - alias: "Rohlík EAN: potvrzení z notifikace"
+    mode: parallel
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data: {}
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.action.startswith('ROHLIK_EAN_') }}"
+    action:
+      - variables:
+          parts: "{{ trigger.event.data.action.split('_') }}"
+      - service: rohlik_ean.confirm_match
+        data:
+          ean: "{{ parts[2] }}"
+          product_id: "{{ parts[3] | int }}"
+          quantity: "{{ parts[4] | int(1) }}"

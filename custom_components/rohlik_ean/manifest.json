@@ -1,0 +1,13 @@
+{
+  "domain": "rohlik_ean",
+  "name": "Rohlík EAN",
+  "after_dependencies": ["rohlikcz"],
+  "codeowners": ["@hruskin"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/hruskin/ha-rohlik-ean",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/hruskin/ha-rohlik-ean/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

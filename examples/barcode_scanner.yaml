@@ -1,0 +1,19 @@
+# Fáze 2 — hardwarová čtečka (ESP32 + GM67 přes ESPHome).
+# Čtečka vystřelí event `esphome.barcode_scan` s EANem; tahle automatizace
+# ho jen předá integraci. Viz https://github.com/MattFryer/HA-Mealie-Barcode-Scanner
+# pro zapojení GM67 (UART) a ESPHome konfiguraci.
+
+automation:
+  - alias: "Rohlík EAN: sken ze čtečky"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: esphome.barcode_scan
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.barcode | regex_match('^\\d{8,14}$') }}"
+    action:
+      - service: rohlik_ean.add_by_ean
+        data:
+          ean: "{{ trigger.event.data.barcode }}"
+          quantity: 1

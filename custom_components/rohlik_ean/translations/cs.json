@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rohlík EAN",
+        "description": "Přidává vyhledávání podle čárového kódu nad integraci Rohlík.cz (rohlikcz). Bez přihlašovacích údajů — přístup ke košíku zajišťuje HA-RohlikCZ."
+      }
+    },
+    "abort": {
+      "already_configured": "Už nakonfigurováno — stačí jedna instance.",
+      "rohlikcz_missing": "Integrace Rohlík.cz (rohlikcz) nebyla nalezena. Nejdřív nainstaluj a nastav HA-RohlikCZ."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "confidence_threshold": "Práh jistoty pro automatické přidání (0.5–1.0)",
+          "trust_ean_hit": "Věřit jedinému výsledku fulltextu Rohlíku pro samotný EAN",
+          "notify_unresolved": "Vytvářet trvalou notifikaci pro nerozpoznané EANy"
+        }
+      }
+    }
+  }
+}

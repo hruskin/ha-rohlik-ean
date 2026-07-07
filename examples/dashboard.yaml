@@ -1,0 +1,36 @@
+# Minimální dashboard pro fázi 1 — ruční zadání EANu.
+#
+# 1) Vytvoř pomocníka: Nastavení → Zařízení a služby → Pomocníci
+#    → Text, entita `input_text.rohlik_ean` (min 8, max 14 znaků).
+# 2) Přidej skript níže (Nastavení → Automatizace a scény → Skripty → YAML).
+# 3) Na dashboard vlož kartu z konce souboru.
+
+script:
+  rohlik_pridej_ean:
+    alias: "Rohlík: přidej podle EAN"
+    mode: queued
+    sequence:
+      - service: rohlik_ean.add_by_ean
+        data:
+          ean: "{{ states('input_text.rohlik_ean') }}"
+          quantity: 1
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.rohlik_ean
+        data:
+          value: ""
+
+# Karta na dashboard (Lovelace YAML):
+#
+# type: vertical-stack
+# cards:
+#   - type: entities
+#     entities:
+#       - entity: input_text.rohlik_ean
+#         name: EAN
+#   - type: button
+#     name: Přidat do košíku
+#     icon: mdi:barcode-scan
+#     tap_action:
+#       action: call-service
+#       service: script.rohlik_pridej_ean
