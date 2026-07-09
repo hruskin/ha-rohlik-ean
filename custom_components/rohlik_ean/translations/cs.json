@@ -31,6 +31,9 @@
     },
     "button": {
       "discard": { "name": "Zahodit čekající sken" }
+    },
+    "text": {
+      "manual_search": { "name": "Hledat název" }
     }
   }
 }

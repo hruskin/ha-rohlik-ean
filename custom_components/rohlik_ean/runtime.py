@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 
 from .const import (
     ATTR_EAN,
@@ -55,6 +56,27 @@ class RohlikEanData:
                 ATTR_QUANTITY: quantity,
             },
         )
+
+    async def async_manual_search(
+        self,
+        name: str,
+        ean: str | None = None,
+        quantity: int | None = None,
+    ) -> list[dict]:
+        """Search Rohlík by a user-typed name and offer results as candidates.
+
+        Without an explicit EAN targets the current pending scan.
+        """
+        if ean is None:
+            current = self.queue.current
+            if current is None:
+                raise ServiceValidationError(
+                    "No pending scan to search for — provide an EAN"
+                )
+            ean = current["ean"]
+        candidates = await self.resolver.async_search(name, limit=8)
+        await self.queue.async_set_candidates(ean, candidates, quantity=quantity)
+        return candidates
 
     async def async_discard_current(self) -> dict | None:
         """Drop the oldest pending scan without learning anything."""

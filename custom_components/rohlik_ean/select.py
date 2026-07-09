@@ -44,7 +44,7 @@ class CandidateSelect(RohlikEanEntity, SelectEntity):
     @property
     def options(self) -> list[str]:
         current = self._data.queue.current
-        if current is None:
+        if current is None or not current["candidates"]:
             return [_EMPTY]
         return [
             _format_option(index, candidate)
@@ -54,8 +54,10 @@ class CandidateSelect(RohlikEanEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         # Action-select: nothing is ever "selected"; state stays unknown
-        # until the queue is empty, then shows the placeholder.
-        return _EMPTY if self._data.queue.current is None else None
+        # while there is something to pick, placeholder otherwise (queue
+        # empty, or a scan without candidates awaiting a manual search).
+        current = self._data.queue.current
+        return _EMPTY if current is None or not current["candidates"] else None
 
     async def async_select_option(self, option: str) -> None:
         current = self._data.queue.current

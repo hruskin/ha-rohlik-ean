@@ -50,6 +50,32 @@ class PendingQueue:
                 return removed
         return None
 
+    async def async_set_candidates(
+        self,
+        ean: str,
+        candidates: list[dict[str, Any]],
+        quantity: int | None = None,
+    ) -> None:
+        """Replace candidates of a queued scan (manual name search)."""
+        for item in self._items:
+            if item["ean"] == ean:
+                item["candidates"] = candidates
+                if quantity is not None:
+                    item["quantity"] = quantity
+                await self._save_and_notify()
+                return
+        # Not queued (e.g. taught proactively before scanning) — enqueue it.
+        self._items.append(
+            {
+                "ean": ean,
+                "quantity": quantity or 1,
+                "candidates": candidates,
+                "metadata": None,
+                "added_at": None,
+            }
+        )
+        await self._save_and_notify()
+
     async def async_pop_current(self) -> dict[str, Any] | None:
         if not self._items:
             return None

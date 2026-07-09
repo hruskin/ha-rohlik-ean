@@ -114,7 +114,7 @@ class EanResolver:
         session = async_get_clientsession(self._hass)
         meta, ean_hits = await asyncio.gather(
             fetch_metadata(session, ean),
-            self._search(ean, limit=5),
+            self.async_search(ean, limit=5),
         )
 
         # A single fulltext hit for a raw digit string is almost certainly an
@@ -133,9 +133,9 @@ class EanResolver:
 
         candidates = list(ean_hits)
         if meta:
-            name_hits = await self._search(meta.search_query, limit=8)
+            name_hits = await self.async_search(meta.search_query, limit=8)
             if not name_hits and meta.brand and meta.name:
-                name_hits = await self._search(meta.name, limit=8)
+                name_hits = await self.async_search(meta.name, limit=8)
             seen = {c["id"] for c in candidates}
             candidates.extend(c for c in name_hits if c["id"] not in seen)
 
@@ -200,7 +200,7 @@ class EanResolver:
             metadata=self._meta_dict(meta),
         )
 
-    async def _search(self, query: str, limit: int) -> list[dict[str, Any]]:
+    async def async_search(self, query: str, limit: int) -> list[dict[str, Any]]:
         """Call rohlikcz.search_product and return its result list."""
         response = await self._hass.services.async_call(
             ROHLIKCZ_DOMAIN,

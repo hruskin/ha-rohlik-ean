@@ -31,6 +31,9 @@
     },
     "button": {
       "discard": { "name": "Discard pending scan" }
+    },
+    "text": {
+      "manual_search": { "name": "Search name" }
     }
   }
 }

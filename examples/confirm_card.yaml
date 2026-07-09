@@ -26,10 +26,14 @@ card:
         {% if states(s) | int(0) > 1 %}
         _(ve frontě čeká {{ states(s) }} skenů)_
         {% endif %}
-    # Výběr = potvrzení + přidání do košíku
+    # Výběr = potvrzení + přidání do košíku.
+    # Když nejsou kandidáti (select ukazuje „—"), napiš název do pole
+    # Hledat název — Rohlík se prohledá ručně (nutné u privátek).
     - type: entities
       entities:
         - entity: select.rohlik_ean_kandidat
           name: Vyber produkt
+        - entity: text.rohlik_ean_hledat_nazev
+          name: Hledat název (když nic nesedí)
         - entity: button.rohlik_ean_zahodit_cekajici_sken
           name: Není to nic z toho

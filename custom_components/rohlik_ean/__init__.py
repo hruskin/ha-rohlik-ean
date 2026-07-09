@@ -28,6 +28,7 @@ from .const import (
     SERVICE_ADD_BY_EAN,
     SERVICE_CONFIRM_MATCH,
     SERVICE_FORGET_EAN,
+    SERVICE_SEARCH_BY_NAME,
 )
 from .pending import PendingQueue
 from .resolver import (
@@ -40,7 +41,7 @@ from .runtime import RohlikEanData
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR]
+PLATFORMS = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR, Platform.TEXT]
 
 _EAN_SCHEMA = vol.All(cv.string, vol.Match(r"^\d{8,14}$"))
 
@@ -72,6 +73,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
             SERVICE_ADD_BY_EAN,
             SERVICE_CONFIRM_MATCH,
             SERVICE_FORGET_EAN,
+            SERVICE_SEARCH_BY_NAME,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -131,6 +133,14 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         removed = await resolver.async_forget(ean)
         return {"status": "forgotten" if removed else "not_cached", ATTR_EAN: ean}
 
+    async def search_by_name(call: ServiceCall) -> dict[str, Any]:
+        candidates = await data.async_manual_search(
+            call.data[ATTR_NAME],
+            ean=call.data.get(ATTR_EAN),
+            quantity=call.data.get(ATTR_QUANTITY),
+        )
+        return {"candidates": candidates}
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_ADD_BY_EAN,
@@ -165,6 +175,19 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         SERVICE_FORGET_EAN,
         forget_ean,
         schema=vol.Schema({vol.Required(ATTR_EAN): _EAN_SCHEMA}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEARCH_BY_NAME,
+        search_by_name,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_NAME): cv.string,
+                vol.Optional(ATTR_EAN): _EAN_SCHEMA,
+                vol.Optional(ATTR_QUANTITY): cv.positive_int,
+            }
+        ),
         supports_response=SupportsResponse.OPTIONAL,
     )
 
@@ -211,7 +234,9 @@ async def _report_unresolved(
             ATTR_QUANTITY: quantity,
         },
     )
-    if resolution.candidates and not dry_run:
+    # Queue even zero-candidate scans: the dashboard card offers a manual
+    # name search (text entity) to fill the candidates afterwards.
+    if not dry_run:
         await data.queue.async_push(
             {
                 "ean": resolution.ean,
@@ -283,8 +308,10 @@ def _unresolved_message(resolution: Resolution, quantity: int) -> str:
                 " privátních značek)."
             )
         lines.append(
-            "Pokud produkt na rohlik.cz ručně najdeš, nauč integraci mapování"
-            " (ID produktu je číslo v URL):\n"
+            "Zadej název produktu do pole **Hledat název** na dashboardu"
+            " (sken čeká ve frontě) a vyber z nabídnutých kandidátů."
+            " Alternativně nauč mapování službou (ID produktu je číslo v URL"
+            " na rohlik.cz):\n"
             "```yaml\n"
             f"service: {DOMAIN}.{SERVICE_CONFIRM_MATCH}\n"
             "data:\n"

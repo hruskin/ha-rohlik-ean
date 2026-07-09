@@ -60,6 +60,12 @@ a vystřelí event:
 Naučí integraci mapování EAN → produkt (`ean`, `product_id`, volitelně
 `name`); s `quantity > 0` produkt rovnou přidá do košíku.
 
+### `rohlik_ean.search_by_name`
+
+Ruční hledání pro čekající sken (`name` povinné; `ean` volitelné — bez něj
+se cílí na aktuální sken ve frontě; `quantity` volitelně přepíše množství
+pro potvrzení). Totéž, co dělá entita **Hledat název**.
+
 ### `rohlik_ean.forget_ean`
 
 Smaže naučené mapování z cache (např. po chybném potvrzení).
@@ -74,6 +80,10 @@ restart HA) a integrace k ní vytváří zařízení **Rohlík EAN** s entitami:
 - **select Kandidát** — kandidáti s plným názvem, gramáží a cenou.
   Výběr možnosti = potvrzení: uloží mapování do cache a přidá produkt do
   košíku v původně požadovaném množství.
+- **text Hledat název** — ruční hledání: napiš název produktu a Rohlík se
+  jím prohledá; výsledky se nabídnou jako kandidáti aktuálního skenu.
+  Nutné u produktů, které nezná OpenFoodFacts ani fulltext (privátní
+  značky) — takové skeny čekají ve frontě s prázdnými kandidáty.
 - **button Zahodit čekající sken** — aktuální sken zahodí bez učení.
 
 Hotová podmíněná karta: [examples/confirm_card.yaml](examples/confirm_card.yaml).
@@ -100,5 +110,5 @@ Hotová podmíněná karta: [examples/confirm_card.yaml](examples/confirm_card.y
 
 - Neoficiální API Rohlíku (přes HA-RohlikCZ) — může se kdykoli změnit.
 - České privátní značky (Miil, …) v OpenFoodFacts často chybí — poprvé je
-  potvrdíš ručně, pak už jedou z cache.
+  dohledáš ručně přes **Hledat název**, pak už jedou z cache.
 - EAN se odesílá na world.openfoodfacts.org (nic jiného).

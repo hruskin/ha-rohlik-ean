@@ -63,6 +63,36 @@ confirm_match:
       selector:
         text:
 
+search_by_name:
+  name: Search by name
+  description: >-
+    Search Rohlík.cz by a manually entered product name and offer the
+    results as candidates for a pending scan (useful for private-label
+    products missing in OpenFoodFacts). Without an EAN it targets the
+    current pending scan.
+  fields:
+    name:
+      name: Product name
+      description: Name to search on Rohlík.cz
+      required: true
+      example: "Miil Tvaroh odtučněný"
+      selector:
+        text:
+    ean:
+      name: EAN
+      description: Scan to attach the candidates to (default = current pending)
+      example: "8594001170012"
+      selector:
+        text:
+    quantity:
+      name: Quantity
+      description: Override the quantity used when the match is confirmed
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+
 forget_ean:
   name: Forget EAN
   description: Remove a learned EAN → product mapping from the cache.
