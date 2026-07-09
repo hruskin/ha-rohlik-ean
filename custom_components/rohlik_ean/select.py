@@ -59,19 +59,29 @@ class CandidateSelect(RohlikEanEntity, SelectEntity):
         current = self._data.queue.current
         return _EMPTY if current is None or not current["candidates"] else None
 
+    async def async_handle_select_option(self, option: str) -> None:
+        # Skip the base class's strict validation: the dropdown the user
+        # clicked may be stale (options change whenever a scan is confirmed
+        # or the queue advances) and the hard ServiceValidationError it
+        # raises is just noise. async_select_option matches exactly against
+        # the live candidates and ignores anything else.
+        await self.async_select_option(option)
+
     async def async_select_option(self, option: str) -> None:
         current = self._data.queue.current
-        if current is None or option == _EMPTY:
-            return
-        try:
-            index = int(option.split(" · ", 1)[0]) - 1
-            candidate = current["candidates"][index]
-        except (ValueError, IndexError):
-            _LOGGER.warning("Stale candidate option selected: %s", option)
-            return
-        await self._data.async_confirm(
-            current["ean"],
-            candidate["id"],
-            name=candidate.get("name"),
-            quantity=current["quantity"],
+        if current is not None and option != _EMPTY:
+            for index, candidate in enumerate(current["candidates"], start=1):
+                if _format_option(index, candidate) == option:
+                    await self._data.async_confirm(
+                        current["ean"],
+                        candidate["id"],
+                        name=candidate.get("name"),
+                        quantity=current["quantity"],
+                    )
+                    return
+        _LOGGER.warning(
+            "Ignoring stale candidate option %r (current scan: %s)",
+            option,
+            current["ean"] if current else None,
         )
+        self.async_write_ha_state()

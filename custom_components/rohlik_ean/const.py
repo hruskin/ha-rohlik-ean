@@ -39,4 +39,4 @@ OFF_URL: Final = (
     "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
     "?fields=product_name,product_name_cs,brands,quantity"
 )
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.4.1 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.4.2 (https://github.com/hruskin/ha-rohlik-ean)"
