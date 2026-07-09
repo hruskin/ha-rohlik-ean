@@ -21,5 +21,16 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "pending": { "name": "Čeká na potvrzení" }
+    },
+    "select": {
+      "candidate": { "name": "Kandidát" }
+    },
+    "button": {
+      "discard": { "name": "Zahodit čekající sken" }
+    }
   }
 }

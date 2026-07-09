@@ -20,8 +20,9 @@ Překladová kaskáda — zkouší se postupně, dokud něco nevrátí produkt:
    a kandidáti se skórují (shoda značky 0.4, gramáže 0.4, názvu 0.2).
    Bez ověřené gramáže se nikdy nepřidává automaticky (klasická past:
    200 g vs. 500 g varianta téhož jogurtu).
-4. **Ruční potvrzení** — trvalá notifikace s kandidáty; volba se službou
-   `confirm_match` uloží do cache, takže příště jede krok 1.
+4. **Ruční potvrzení** — sken se zařadí do potvrzovací fronty (entity na
+   dashboardu + notifikace); potvrzená volba se uloží do cache, takže
+   příště jede krok 1.
 
 ## Požadavky
 
@@ -63,6 +64,20 @@ Naučí integraci mapování EAN → produkt (`ean`, `product_id`, volitelně
 
 Smaže naučené mapování z cache (např. po chybném potvrzení).
 
+## Entity (potvrzovací fronta)
+
+Nerozpoznané skeny s kandidáty čekají v perzistentní frontě (přežije
+restart HA) a integrace k ní vytváří zařízení **Rohlík EAN** s entitami:
+
+- **sensor Čeká na potvrzení** — počet čekajících skenů; atributy nesou
+  EAN, metadata z OpenFoodFacts a kandidáty aktuálního (nejstaršího) skenu.
+- **select Kandidát** — kandidáti s plným názvem, gramáží a cenou.
+  Výběr možnosti = potvrzení: uloží mapování do cache a přidá produkt do
+  košíku v původně požadovaném množství.
+- **button Zahodit čekající sken** — aktuální sken zahodí bez učení.
+
+Hotová podmíněná karta: [examples/confirm_card.yaml](examples/confirm_card.yaml).
+
 ## Možnosti (Nastavit u integrace)
 
 - **Práh jistoty** (výchozí 0.75) — od jakého skóre se přidává automaticky.
@@ -74,6 +89,8 @@ Smaže naučené mapování z cache (např. po chybném potvrzení).
 
 - [examples/dashboard.yaml](examples/dashboard.yaml) — ruční zadání EANu na
   dashboardu (fáze 1)
+- [examples/confirm_card.yaml](examples/confirm_card.yaml) — podmíněná
+  karta s potvrzovací frontou (plné názvy kandidátů)
 - [examples/unresolved_notification.yaml](examples/unresolved_notification.yaml)
   — actionable notifikace do mobilu s výběrem kandidáta jedním tapnutím
 - [examples/barcode_scanner.yaml](examples/barcode_scanner.yaml) — napojení

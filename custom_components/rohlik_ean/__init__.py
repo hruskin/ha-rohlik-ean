@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -27,37 +29,56 @@ from .const import (
     SERVICE_CONFIRM_MATCH,
     SERVICE_FORGET_EAN,
 )
+from .pending import PendingQueue
 from .resolver import (
     STATUS_MATCHED,
     STATUS_NEEDS_CONFIRMATION,
     EanResolver,
     Resolution,
 )
+from .runtime import RohlikEanData
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR]
+
 _EAN_SCHEMA = vol.All(cv.string, vol.Match(r"^\d{8,14}$"))
 
+type RohlikEanConfigEntry = ConfigEntry[RohlikEanData]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+
+async def async_setup_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -> bool:
     """Set up the (single) Rohlík EAN entry."""
     resolver = EanResolver(hass, entry)
     await resolver.async_load()
-    hass.data[DOMAIN] = resolver
-    _register_services(hass)
+    queue = PendingQueue(hass)
+    await queue.async_load()
+
+    data = RohlikEanData(hass=hass, resolver=resolver, queue=queue)
+    entry.runtime_data = data
+    hass.data[DOMAIN] = data
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _register_services(hass, data)
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload the entry and its services."""
-    hass.data.pop(DOMAIN, None)
-    for service in (SERVICE_ADD_BY_EAN, SERVICE_CONFIRM_MATCH, SERVICE_FORGET_EAN):
-        hass.services.async_remove(DOMAIN, service)
-    return True
+async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -> bool:
+    """Unload the entry, its platforms and services."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data.pop(DOMAIN, None)
+        for service in (
+            SERVICE_ADD_BY_EAN,
+            SERVICE_CONFIRM_MATCH,
+            SERVICE_FORGET_EAN,
+        ):
+            hass.services.async_remove(DOMAIN, service)
+    return unload_ok
 
 
-def _register_services(hass: HomeAssistant) -> None:
-    resolver: EanResolver = hass.data[DOMAIN]
+def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
+    resolver = data.resolver
 
     async def add_by_ean(call: ServiceCall) -> dict[str, Any]:
         ean: str = call.data[ATTR_EAN]
@@ -73,9 +94,7 @@ def _register_services(hass: HomeAssistant) -> None:
             and resolution.source == "cache"
         ):
             try:
-                await resolver.async_add_to_cart(
-                    resolution.product["id"], quantity
-                )
+                await resolver.async_add_to_cart(resolution.product["id"], quantity)
                 return _report_matched(hass, resolution, quantity, added=True)
             except HomeAssistantError:
                 _LOGGER.warning(
@@ -96,7 +115,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 )
             return _report_matched(hass, resolution, quantity, added=added)
 
-        return _report_unresolved(hass, resolver, resolution, quantity)
+        return await _report_unresolved(hass, data, resolution, quantity, dry_run)
 
     async def confirm_match(call: ServiceCall) -> dict[str, Any]:
         ean: str = call.data[ATTR_EAN]
@@ -104,22 +123,7 @@ def _register_services(hass: HomeAssistant) -> None:
         quantity: int = call.data[ATTR_QUANTITY]
         name: str | None = call.data.get(ATTR_NAME)
 
-        await resolver.async_remember(ean, product_id, name)
-        if quantity > 0:
-            await resolver.async_add_to_cart(product_id, quantity)
-        persistent_notification.async_dismiss(hass, f"{DOMAIN}_{ean}")
-        hass.bus.async_fire(
-            EVENT_MATCHED,
-            {
-                ATTR_EAN: ean,
-                ATTR_PRODUCT_ID: product_id,
-                ATTR_NAME: name,
-                "source": "manual",
-                "confidence": 1.0,
-                "added": quantity > 0,
-                ATTR_QUANTITY: quantity,
-            },
-        )
+        await data.async_confirm(ean, product_id, name=name, quantity=quantity)
         return {"status": "confirmed", ATTR_EAN: ean, ATTR_PRODUCT_ID: product_id}
 
     async def forget_ean(call: ServiceCall) -> dict[str, Any]:
@@ -190,11 +194,12 @@ def _report_matched(
     }
 
 
-def _report_unresolved(
+async def _report_unresolved(
     hass: HomeAssistant,
-    resolver: EanResolver,
+    data: RohlikEanData,
     resolution: Resolution,
     quantity: int,
+    dry_run: bool,
 ) -> dict[str, Any]:
     hass.bus.async_fire(
         EVENT_UNRESOLVED,
@@ -206,7 +211,19 @@ def _report_unresolved(
             ATTR_QUANTITY: quantity,
         },
     )
-    if resolver.entry.options.get(CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED):
+    if resolution.candidates and not dry_run:
+        await data.queue.async_push(
+            {
+                "ean": resolution.ean,
+                "quantity": quantity,
+                "candidates": resolution.candidates,
+                "metadata": resolution.metadata,
+                "added_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    if data.resolver.entry.options.get(
+        CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED
+    ):
         persistent_notification.async_create(
             hass,
             _unresolved_message(resolution, quantity),
@@ -243,14 +260,14 @@ def _unresolved_message(resolution: Resolution, quantity: int) -> str:
                 f"{idx}. **{candidate.get('name')}** ({candidate.get('amount') or '?'})"
                 f" – {candidate.get('price') or '?'} – ID `{candidate['id']}`{score}"
             )
-        first_id = resolution.candidates[0]["id"] if resolution.candidates else 0
         lines.append(
-            "\nPotvrď správný produkt (uloží se do cache a přidá do košíku):\n"
+            "\nVyber kandidáta v entitě **Kandidát** (select) na dashboardu,"
+            " nebo potvrď službou:\n"
             "```yaml\n"
             f"service: {DOMAIN}.{SERVICE_CONFIRM_MATCH}\n"
             "data:\n"
             f"  ean: \"{resolution.ean}\"\n"
-            f"  product_id: {first_id}\n"
+            f"  product_id: {resolution.candidates[0]['id'] if resolution.candidates else 0}\n"
             f"  quantity: {quantity}\n"
             "```"
         )

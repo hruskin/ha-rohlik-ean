@@ -1,0 +1,35 @@
+# Karta pro potvrzovací frontu (v0.2.0+) — plné názvy kandidátů bez ořezávání.
+#
+# Entity vytváří integrace sama (zařízení „Rohlík EAN"); přesná entity_id
+# si ověř v Nastavení → Zařízení a služby → Rohlík EAN (odvozují se
+# z přeložených názvů, níže jsou výchozí česká).
+#
+# Karta se zobrazí, jen když něco čeká na potvrzení.
+
+type: conditional
+conditions:
+  - condition: numeric_state
+    entity: sensor.rohlik_ean_ceka_na_potvrzeni
+    above: 0
+card:
+  type: vertical-stack
+  cards:
+    # Co říká OpenFoodFacts o naskenovaném kódu
+    - type: markdown
+      content: >-
+        {% set s = 'sensor.rohlik_ean_ceka_na_potvrzeni' %}
+        **EAN {{ state_attr(s, 'ean') }}**
+        {% if state_attr(s, 'metadata') %}
+        — {{ state_attr(s, 'metadata').brand }} {{ state_attr(s, 'metadata').name }}
+        ({{ state_attr(s, 'metadata').quantity or '?' }})
+        {% endif %}
+        {% if states(s) | int(0) > 1 %}
+        _(ve frontě čeká {{ states(s) }} skenů)_
+        {% endif %}
+    # Výběr = potvrzení + přidání do košíku
+    - type: entities
+      entities:
+        - entity: select.rohlik_ean_kandidat
+          name: Vyber produkt
+        - entity: button.rohlik_ean_zahodit_cekajici_sken
+          name: Není to nic z toho

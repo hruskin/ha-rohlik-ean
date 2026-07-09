@@ -7,7 +7,10 @@ DOMAIN: Final = "rohlik_ean"
 ROHLIKCZ_DOMAIN: Final = "rohlikcz"
 
 STORAGE_KEY: Final = f"{DOMAIN}.cache"
+QUEUE_STORAGE_KEY: Final = f"{DOMAIN}.queue"
 STORAGE_VERSION: Final = 1
+
+SIGNAL_QUEUE_UPDATED: Final = f"{DOMAIN}_queue_updated"
 
 CONF_CONFIDENCE_THRESHOLD: Final = "confidence_threshold"
 CONF_TRUST_EAN_HIT: Final = "trust_ean_hit"
@@ -34,4 +37,4 @@ OFF_URL: Final = (
     "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
     "?fields=product_name,product_name_cs,brands,quantity"
 )
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.1.0 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.2.0 (https://github.com/hruskin/ha-rohlik-ean)"

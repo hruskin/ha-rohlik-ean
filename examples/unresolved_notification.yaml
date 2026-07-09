@@ -34,6 +34,9 @@ automation:
             # Android: zobrazí celé tělo notifikace po rozbalení
             styles:
               bigText: true
+            # Tap na notifikaci otevře dashboard s potvrzovací kartou
+            # (viz examples/confirm_card.yaml) — uprav cestu na svůj view.
+            clickAction: /lovelace/rohlik
             actions: >-
               {% set ns = namespace(actions=[]) %}
               {% for c in trigger.event.data.candidates[:3] %}

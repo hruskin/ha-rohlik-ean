@@ -21,5 +21,16 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "pending": { "name": "Pending confirmations" }
+    },
+    "select": {
+      "candidate": { "name": "Candidate" }
+    },
+    "button": {
+      "discard": { "name": "Discard pending scan" }
+    }
   }
 }
