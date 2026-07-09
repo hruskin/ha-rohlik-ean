@@ -100,9 +100,9 @@ class EanResolver:
             return True
         return False
 
-    async def async_resolve(self, ean: str) -> Resolution:
+    async def async_resolve(self, ean: str, bypass_cache: bool = False) -> Resolution:
         """Run the cascade for one EAN."""
-        if cached := self._cache.get(ean):
+        if not bypass_cache and (cached := self._cache.get(ean)):
             return Resolution(
                 status=STATUS_MATCHED,
                 ean=ean,
@@ -217,9 +217,13 @@ class EanResolver:
             return []
         return [c for c in response.get("search_results", []) if c.get("id")]
 
-    async def async_add_to_cart(self, product_id: int, quantity: int) -> None:
-        """Add a product to the Rohlík cart via the rohlikcz integration."""
-        await self._hass.services.async_call(
+    async def async_add_to_cart(self, product_id: int, quantity: int) -> bool:
+        """Add a product to the Rohlík cart; True when it really was added.
+
+        The underlying client swallows per-item errors (out of stock,
+        delisted) and only reports successfully added ids.
+        """
+        response = await self._hass.services.async_call(
             ROHLIKCZ_DOMAIN,
             "add_to_cart",
             {
@@ -230,6 +234,22 @@ class EanResolver:
             blocking=True,
             return_response=True,
         )
+        added = (response or {}).get("added_products", [])
+        return any(str(item) == str(product_id) for item in added)
+
+    async def async_cart_product_name(self, product_id: int) -> str | None:
+        """Look up a product's name from the current cart content."""
+        response = await self._hass.services.async_call(
+            ROHLIKCZ_DOMAIN,
+            "get_cart_content",
+            {"config_entry_id": self.rohlikcz_entry_id()},
+            blocking=True,
+            return_response=True,
+        )
+        for item in (response or {}).get("products", []):
+            if str(item.get("id")) == str(product_id):
+                return item.get("name")
+        return None
 
     def rohlikcz_entry_id(self) -> str:
         """Return the first loaded rohlikcz config entry."""

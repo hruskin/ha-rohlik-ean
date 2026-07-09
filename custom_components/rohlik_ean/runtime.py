@@ -16,7 +16,10 @@ from .const import (
     ATTR_NAME,
     ATTR_PRODUCT_ID,
     ATTR_QUANTITY,
+    CONF_NOTIFY_UNRESOLVED,
+    DEFAULT_NOTIFY_UNRESOLVED,
     DOMAIN,
+    EVENT_ADD_FAILED,
     EVENT_MATCHED,
 )
 from .pending import PendingQueue
@@ -39,9 +42,12 @@ class RohlikEanData:
         quantity: int = 0,
     ) -> None:
         """Teach the cache, optionally add to cart, and clear pending state."""
-        await self.resolver.async_remember(ean, product_id, name)
+        added = False
         if quantity > 0:
-            await self.resolver.async_add_to_cart(product_id, quantity)
+            added = await self.resolver.async_add_to_cart(product_id, quantity)
+            if added and not name:
+                name = await self.resolver.async_cart_product_name(product_id)
+        await self.resolver.async_remember(ean, product_id, name)
         await self.queue.async_remove(ean)
         persistent_notification.async_dismiss(self.hass, f"{DOMAIN}_{ean}")
         self.hass.bus.async_fire(
@@ -52,10 +58,39 @@ class RohlikEanData:
                 ATTR_NAME: name,
                 "source": "manual",
                 "confidence": 1.0,
-                "added": quantity > 0,
+                "added": added,
                 ATTR_QUANTITY: quantity,
             },
         )
+        if quantity > 0 and not added:
+            await self.async_report_add_failed(ean, product_id, name, quantity)
+
+    async def async_report_add_failed(
+        self, ean: str, product_id: int, name: str | None, quantity: int
+    ) -> None:
+        """Announce that a resolved product could not be added to the cart."""
+        self.hass.bus.async_fire(
+            EVENT_ADD_FAILED,
+            {
+                ATTR_EAN: ean,
+                ATTR_PRODUCT_ID: product_id,
+                ATTR_NAME: name,
+                ATTR_QUANTITY: quantity,
+                "reason": "unavailable",
+            },
+        )
+        if self.resolver.entry.options.get(
+            CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED
+        ):
+            label = name or f"ID {product_id}"
+            persistent_notification.async_create(
+                self.hass,
+                f"**{label}** (EAN {ean}) se nepodařilo přidat do košíku —"
+                " nejspíš je vyprodaný. Naučené mapování zůstává uložené;"
+                " zkus to později.",
+                title="Rohlík EAN: produkt nedostupný",
+                notification_id=f"{DOMAIN}_fail_{ean}",
+            )
 
     async def async_manual_search(
         self,

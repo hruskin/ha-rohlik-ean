@@ -1,0 +1,56 @@
+# Hlasové oznámení výsledku skenu na Google Nest / jiný media_player.
+#
+# Nahraď `media_player.nest_hub` svým přehrávačem a `tts.google_translate_cs`
+# svojí TTS entitou (Nastavení → Zařízení a služby → TTS).
+
+automation:
+  - alias: "Rohlík EAN: oznam přidání"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_matched
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.added }}"
+    action:
+      - service: tts.speak
+        target:
+          entity_id: tts.google_translate_cs
+        data:
+          media_player_entity_id: media_player.nest_hub
+          message: >-
+            Přidáno do košíku: {{ trigger.event.data.name or 'produkt ' ~ trigger.event.data.product_id }}
+            {%- if trigger.event.data.quantity > 1 %}, {{ trigger.event.data.quantity }} kusy{% endif %}.
+
+  - alias: "Rohlík EAN: oznam nedostupnost"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_add_failed
+    action:
+      - service: tts.speak
+        target:
+          entity_id: tts.google_translate_cs
+        data:
+          media_player_entity_id: media_player.nest_hub
+          message: >-
+            {{ trigger.event.data.name or 'Naskenovaný produkt' }} není skladem,
+            do košíku se nepřidal.
+
+  - alias: "Rohlík EAN: oznam nerozpoznaný kód"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_unresolved
+    action:
+      - service: tts.speak
+        target:
+          entity_id: tts.google_translate_cs
+        data:
+          media_player_entity_id: media_player.nest_hub
+          message: >-
+            {% if trigger.event.data.candidates | count > 0 %}
+            Kód potřebuje potvrzení, mrkni na telefon.
+            {% else %}
+            Kód se nepodařilo rozpoznat, zadej název ručně.
+            {% endif %}

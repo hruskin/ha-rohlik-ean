@@ -11,7 +11,6 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
@@ -88,36 +87,59 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         dry_run: bool = call.data[ATTR_DRY_RUN]
 
         resolution = await resolver.async_resolve(ean)
+        if resolution.status != STATUS_MATCHED:
+            return await _report_unresolved(hass, data, resolution, quantity, dry_run)
+        if dry_run:
+            return _report_matched(hass, resolution, quantity, added=False)
 
-        # A cached product may have been delisted; retry the cascade once.
-        if (
-            resolution.status == STATUS_MATCHED
-            and not dry_run
-            and resolution.source == "cache"
-        ):
-            try:
-                await resolver.async_add_to_cart(resolution.product["id"], quantity)
-                return _report_matched(hass, resolution, quantity, added=True)
-            except HomeAssistantError:
-                _LOGGER.warning(
-                    "Cached product %s for EAN %s failed to add, re-resolving",
-                    resolution.product["id"],
+        added = await resolver.async_add_to_cart(resolution.product["id"], quantity)
+
+        # A cached mapping whose product no longer adds may point to a
+        # delisted id that Rohlík replaced — re-run the cascade without the
+        # cache and retry only when it yields a DIFFERENT product. Same id
+        # (or no match) means the mapping is fine and the product is merely
+        # out of stock: keep the learned mapping.
+        if not added and resolution.source == "cache":
+            fresh = await resolver.async_resolve(ean, bypass_cache=True)
+            if (
+                fresh.status == STATUS_MATCHED
+                and fresh.product["id"] != resolution.product["id"]
+            ):
+                _LOGGER.info(
+                    "EAN %s: cached product %s replaced by %s, relearning",
                     ean,
+                    resolution.product["id"],
+                    fresh.product["id"],
                 )
-                await resolver.async_forget(ean)
-                resolution = await resolver.async_resolve(ean)
-
-        if resolution.status == STATUS_MATCHED:
-            added = False
-            if not dry_run:
-                await resolver.async_add_to_cart(resolution.product["id"], quantity)
-                added = True
-                await resolver.async_remember(
-                    ean, resolution.product["id"], resolution.product.get("name")
+                resolution = fresh
+                added = await resolver.async_add_to_cart(
+                    resolution.product["id"], quantity
                 )
-            return _report_matched(hass, resolution, quantity, added=added)
 
-        return await _report_unresolved(hass, data, resolution, quantity, dry_run)
+        if not added:
+            await data.async_report_add_failed(
+                ean,
+                resolution.product["id"],
+                resolution.product.get("name"),
+                quantity,
+            )
+            return {
+                "status": "add_failed",
+                ATTR_EAN: ean,
+                "source": resolution.source,
+                "confidence": resolution.confidence,
+                "product": resolution.product,
+                "added": False,
+            }
+
+        # Backfill the product name (older cache entries may lack it) so
+        # events and responses can drive TTS announcements.
+        name = resolution.product.get("name") or await resolver.async_cart_product_name(
+            resolution.product["id"]
+        )
+        resolution.product["name"] = name
+        await resolver.async_remember(ean, resolution.product["id"], name)
+        return _report_matched(hass, resolution, quantity, added=True)
 
     async def confirm_match(call: ServiceCall) -> dict[str, Any]:
         ean: str = call.data[ATTR_EAN]

@@ -54,6 +54,17 @@ a vystřelí event:
   `source`, `confidence`, `added`, `quantity`)
 - `rohlik_ean_unresolved` — potřeba potvrzení nebo nenalezeno (`ean`,
   `status`, `candidates`, `metadata`, `quantity`)
+- `rohlik_ean_add_failed` — produkt rozpoznán, ale nepřidal se (typicky
+  vyprodáno; `ean`, `product_id`, `name`, `quantity`, `reason`). Naučené
+  mapování se v tom případě zachovává. Pokud Rohlík produkt nahradil
+  novým ID, integrace to pozná (přeresolvuje mimo cache), přeučí se
+  a přidá náhradu automaticky.
+
+Úspěšné přidání se ověřuje proti odpovědi košíku (`added_products`) —
+`added: true` znamená, že produkt v košíku opravdu je. Název produktu se
+do události doplňuje i pro starší mapování uložená beze jména (z obsahu
+košíku), takže jde použít pro hlasová oznámení — viz
+[examples/announce.yaml](examples/announce.yaml).
 
 ### `rohlik_ean.confirm_match`
 
@@ -103,6 +114,8 @@ Hotová podmíněná karta: [examples/confirm_card.yaml](examples/confirm_card.y
   karta s potvrzovací frontou (plné názvy kandidátů)
 - [examples/unresolved_notification.yaml](examples/unresolved_notification.yaml)
   — actionable notifikace do mobilu s výběrem kandidáta jedním tapnutím
+- [examples/announce.yaml](examples/announce.yaml) — hlasové oznámení
+  výsledku skenu přes TTS (Google Nest apod.)
 - [examples/barcode_scanner.yaml](examples/barcode_scanner.yaml) — napojení
   hardwarové čtečky ESP32 + GM67 (fáze 2)
 

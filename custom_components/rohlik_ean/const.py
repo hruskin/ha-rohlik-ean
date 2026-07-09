@@ -33,9 +33,10 @@ SERVICE_SEARCH_BY_NAME: Final = "search_by_name"
 
 EVENT_MATCHED: Final = f"{DOMAIN}_matched"
 EVENT_UNRESOLVED: Final = f"{DOMAIN}_unresolved"
+EVENT_ADD_FAILED: Final = f"{DOMAIN}_add_failed"
 
 OFF_URL: Final = (
     "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
     "?fields=product_name,product_name_cs,brands,quantity"
 )
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.3.0 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.4.0 (https://github.com/hruskin/ha-rohlik-ean)"
