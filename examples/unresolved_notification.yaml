@@ -1,6 +1,10 @@
 # Actionable notifikace do mobilu, když integrace neví jistě.
-# Nabídne až 3 kandidáty jako tlačítka; tap = potvrzení + přidání do košíku
-# + uložení mapování do cache (příště už se nebude ptát).
+#
+# Tlačítka akcí mají v Androidu místo jen na ~20 znaků, proto nesou jen
+# číslo + gramáž ("1 · 500 g"); plné názvy kandidátů včetně ceny jsou
+# v těle notifikace (na Androidu se zobrazí po rozbalení šipkou).
+# Tap na tlačítko = potvrzení + přidání do košíku + uložení do cache
+# (příště už se integrace nebude ptát).
 #
 # Nahraď `notify.mobile_app_XXX` svojí notify službou.
 
@@ -16,21 +20,26 @@ automation:
     action:
       - service: notify.mobile_app_XXX
         data:
-          title: "Rohlík: EAN {{ trigger.event.data.ean }}"
-          message: >-
+          title: >-
             {% if trigger.event.data.metadata %}
-            {{ trigger.event.data.metadata.brand }} {{ trigger.event.data.metadata.name }}
-            ({{ trigger.event.data.metadata.quantity }}) — vyber produkt:
+            Rohlík: {{ trigger.event.data.metadata.brand }} {{ trigger.event.data.metadata.name }}?
             {% else %}
-            Neznámý kód — vyber produkt:
+            Rohlík: EAN {{ trigger.event.data.ean }}
             {% endif %}
+          message: >-
+            {% for c in trigger.event.data.candidates[:3] -%}
+            {{ loop.index }}) {{ c.name }} ({{ c.amount or '?' }}) – {{ c.price or '?' }}
+            {% endfor %}
           data:
+            # Android: zobrazí celé tělo notifikace po rozbalení
+            styles:
+              bigText: true
             actions: >-
               {% set ns = namespace(actions=[]) %}
               {% for c in trigger.event.data.candidates[:3] %}
               {% set ns.actions = ns.actions + [{
                 "action": "ROHLIK_EAN_" ~ trigger.event.data.ean ~ "_" ~ c.id ~ "_" ~ trigger.event.data.quantity,
-                "title": (c.name ~ " (" ~ (c.amount or "?") ~ ")") | truncate(40)
+                "title": loop.index ~ " · " ~ (c.amount or (c.price or "?"))
               }] %}
               {% endfor %}
               {{ ns.actions }}
