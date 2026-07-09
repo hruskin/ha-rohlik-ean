@@ -90,7 +90,9 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         if resolution.status != STATUS_MATCHED:
             return await _report_unresolved(hass, data, resolution, quantity, dry_run)
         if dry_run:
-            return _report_matched(hass, resolution, quantity, added=False)
+            return _report_matched(
+                hass, resolution, quantity, added=False, fire_event=False
+            )
 
         added = await resolver.async_add_to_cart(resolution.product["id"], quantity)
 
@@ -215,20 +217,25 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
 
 
 def _report_matched(
-    hass: HomeAssistant, resolution: Resolution, quantity: int, added: bool
+    hass: HomeAssistant,
+    resolution: Resolution,
+    quantity: int,
+    added: bool,
+    fire_event: bool = True,
 ) -> dict[str, Any]:
-    hass.bus.async_fire(
-        EVENT_MATCHED,
-        {
-            ATTR_EAN: resolution.ean,
-            ATTR_PRODUCT_ID: resolution.product["id"],
-            ATTR_NAME: resolution.product.get("name"),
-            "source": resolution.source,
-            "confidence": resolution.confidence,
-            "added": added,
-            ATTR_QUANTITY: quantity,
-        },
-    )
+    if fire_event:
+        hass.bus.async_fire(
+            EVENT_MATCHED,
+            {
+                ATTR_EAN: resolution.ean,
+                ATTR_PRODUCT_ID: resolution.product["id"],
+                ATTR_NAME: resolution.product.get("name"),
+                "source": resolution.source,
+                "confidence": resolution.confidence,
+                "added": added,
+                ATTR_QUANTITY: quantity,
+            },
+        )
     return {
         "status": resolution.status,
         ATTR_EAN: resolution.ean,
@@ -246,19 +253,21 @@ async def _report_unresolved(
     quantity: int,
     dry_run: bool,
 ) -> dict[str, Any]:
-    hass.bus.async_fire(
-        EVENT_UNRESOLVED,
-        {
-            ATTR_EAN: resolution.ean,
-            "status": resolution.status,
-            "candidates": resolution.candidates,
-            "metadata": resolution.metadata,
-            ATTR_QUANTITY: quantity,
-        },
-    )
-    # Queue even zero-candidate scans: the dashboard card offers a manual
-    # name search (text entity) to fill the candidates afterwards.
+    # Dry run is side-effect-free: no event, no queue, no notification —
+    # everything the caller needs is in the response.
     if not dry_run:
+        hass.bus.async_fire(
+            EVENT_UNRESOLVED,
+            {
+                ATTR_EAN: resolution.ean,
+                "status": resolution.status,
+                "candidates": resolution.candidates,
+                "metadata": resolution.metadata,
+                ATTR_QUANTITY: quantity,
+            },
+        )
+        # Queue even zero-candidate scans: the dashboard card offers a manual
+        # name search (text entity) to fill the candidates afterwards.
         await data.queue.async_push(
             {
                 "ean": resolution.ean,
@@ -268,7 +277,7 @@ async def _report_unresolved(
                 "added_at": datetime.now(timezone.utc).isoformat(),
             }
         )
-    if data.resolver.entry.options.get(
+    if not dry_run and data.resolver.entry.options.get(
         CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED
     ):
         persistent_notification.async_create(
