@@ -47,6 +47,30 @@ automation:
               {% endfor %}
               {{ ns.actions }}
 
+  # Kód se nenašel vůbec (žádní kandidáti) — jen informuj, ať sken
+  # nezapadne; detail s návodem je v trvalé notifikaci v HA.
+  - alias: "Rohlík EAN: nenalezeno"
+    mode: parallel
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_unresolved
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.candidates | count == 0 }}"
+    action:
+      - service: notify.mobile_app_XXX
+        data:
+          title: "Rohlík: produkt nenalezen"
+          message: >-
+            {% if trigger.event.data.metadata %}
+            {{ trigger.event.data.metadata.brand }} {{ trigger.event.data.metadata.name }}
+            ({{ trigger.event.data.metadata.quantity or '?' }}) — Rohlík ho nejspíš nevede.
+            {% else %}
+            Neznámý kód {{ trigger.event.data.ean }} — přidej ručně.
+            {% endif %}
+          data:
+            clickAction: /lovelace/rohlik
+
   - alias: "Rohlík EAN: potvrzení z notifikace"
     mode: parallel
     trigger:

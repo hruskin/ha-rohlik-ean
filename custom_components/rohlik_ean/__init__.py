@@ -272,9 +272,19 @@ def _unresolved_message(resolution: Resolution, quantity: int) -> str:
             "```"
         )
     else:
+        if resolution.metadata:
+            lines.append(
+                "\nProdukt je známý, ale hledání na Rohlíku nic nevrátilo —"
+                " Rohlík ho nejspíš vůbec neprodává, případně pod jiným názvem."
+            )
+        else:
+            lines.append(
+                "\nKód nezná OpenFoodFacts ani fulltext Rohlíku (časté u"
+                " privátních značek)."
+            )
         lines.append(
-            "\nProdukt se nepodařilo najít ani na Rohlíku. Najdi ho ručně a nauč"
-            " integraci mapování:\n"
+            "Pokud produkt na rohlik.cz ručně najdeš, nauč integraci mapování"
+            " (ID produktu je číslo v URL):\n"
             "```yaml\n"
             f"service: {DOMAIN}.{SERVICE_CONFIRM_MATCH}\n"
             "data:\n"
