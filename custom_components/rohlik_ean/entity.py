@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
@@ -32,5 +33,9 @@ class RohlikEanEntity(Entity):
             )
         )
 
+    @callback
     def _handle_queue_update(self) -> None:
+        # @callback keeps the dispatcher target in the event loop; a plain
+        # sync method would be scheduled on a worker thread, where
+        # async_write_ha_state raises and the entity never re-renders.
         self.async_write_ha_state()
