@@ -18,6 +18,7 @@ class EanMetadata:
     name: str | None
     brand: str | None
     quantity: str | None
+    image: str | None = None
 
     @property
     def search_query(self) -> str:
@@ -50,6 +51,7 @@ async def fetch_metadata(session: aiohttp.ClientSession, ean: str) -> EanMetadat
         name=name,
         brand=product.get("brands") or None,
         quantity=product.get("quantity") or None,
+        image=product.get("image_front_small_url") or None,
     )
     if not meta.search_query:
         return None

@@ -18,12 +18,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     ATTR_DRY_RUN,
     ATTR_EAN,
+    ATTR_EANS,
     ATTR_NAME,
     ATTR_PRODUCT_ID,
+    ATTR_PRODUCT_IDS,
     ATTR_QUANTITY,
     CONF_NOTIFY_UNRESOLVED,
     DEFAULT_NOTIFY_UNRESOLVED,
@@ -36,9 +39,12 @@ from .const import (
     SERVICE_CONFIRM_MATCH,
     SERVICE_DISCARD_SCAN,
     SERVICE_FORGET_EAN,
+    SERVICE_FORGET_EANS,
     SERVICE_GET_MAPPINGS,
+    SERVICE_GET_PRODUCT_IMAGES,
     SERVICE_GET_QUEUE,
     SERVICE_SEARCH_BY_NAME,
+    SERVICE_SEARCH_PRODUCTS,
 )
 from .pending import PendingQueue
 from .resolver import (
@@ -123,6 +129,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
             SERVICE_GET_QUEUE,
             SERVICE_DISCARD_SCAN,
             SERVICE_GET_MAPPINGS,
+            SERVICE_FORGET_EANS,
+            SERVICE_SEARCH_PRODUCTS,
+            SERVICE_GET_PRODUCT_IMAGES,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -221,6 +230,22 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
     async def get_mappings(call: ServiceCall) -> dict[str, Any]:
         return {"mappings": data.resolver.mappings}
 
+    async def forget_eans(call: ServiceCall) -> dict[str, Any]:
+        removed = await resolver.async_forget_many(call.data[ATTR_EANS])
+        return {"removed": removed}
+
+    async def search_products(call: ServiceCall) -> dict[str, Any]:
+        # Plain search for the panel's edit flow — does NOT touch the queue.
+        candidates = await resolver.async_search(call.data[ATTR_NAME], limit=8)
+        return {"candidates": candidates}
+
+    async def get_product_images(call: ServiceCall) -> dict[str, Any]:
+        session = async_get_clientsession(hass)
+        images = await data.images.async_get_many(
+            session, call.data[ATTR_PRODUCT_IDS]
+        )
+        return {"images": {str(pid): url for pid, url in images.items()}}
+
     async def discard_scan(call: ServiceCall) -> dict[str, Any]:
         item = await data.async_discard(call.data.get(ATTR_EAN))
         return {
@@ -289,6 +314,35 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         SERVICE_GET_MAPPINGS,
         get_mappings,
         schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_FORGET_EANS,
+        forget_eans,
+        schema=vol.Schema(
+            {vol.Required(ATTR_EANS): vol.All(cv.ensure_list, [_EAN_SCHEMA])}
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEARCH_PRODUCTS,
+        search_products,
+        schema=vol.Schema({vol.Required(ATTR_NAME): cv.string}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_PRODUCT_IMAGES,
+        get_product_images,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_PRODUCT_IDS): vol.All(
+                    cv.ensure_list, [cv.positive_int]
+                )
+            }
+        ),
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(

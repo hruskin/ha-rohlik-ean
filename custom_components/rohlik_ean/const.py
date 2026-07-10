@@ -21,9 +21,11 @@ DEFAULT_TRUST_EAN_HIT: Final = True
 DEFAULT_NOTIFY_UNRESOLVED: Final = True
 
 ATTR_EAN: Final = "ean"
+ATTR_EANS: Final = "eans"
 ATTR_QUANTITY: Final = "quantity"
 ATTR_DRY_RUN: Final = "dry_run"
 ATTR_PRODUCT_ID: Final = "product_id"
+ATTR_PRODUCT_IDS: Final = "product_ids"
 ATTR_NAME: Final = "name"
 
 SERVICE_ADD_BY_EAN: Final = "add_by_ean"
@@ -33,6 +35,9 @@ SERVICE_SEARCH_BY_NAME: Final = "search_by_name"
 SERVICE_GET_QUEUE: Final = "get_queue"
 SERVICE_DISCARD_SCAN: Final = "discard_scan"
 SERVICE_GET_MAPPINGS: Final = "get_mappings"
+SERVICE_FORGET_EANS: Final = "forget_eans"
+SERVICE_SEARCH_PRODUCTS: Final = "search_products"
+SERVICE_GET_PRODUCT_IMAGES: Final = "get_product_images"
 
 PANEL_URL_PATH: Final = "rohlik-ean"
 PANEL_JS_URL: Final = "/rohlik_ean_panel/panel.js"
@@ -45,6 +50,6 @@ EVENT_CACHE_CHANGED: Final = f"{DOMAIN}_cache_changed"
 
 OFF_URL: Final = (
     "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
-    "?fields=product_name,product_name_cs,brands,quantity"
+    "?fields=product_name,product_name_cs,brands,quantity,image_front_small_url"
 )
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.6.0 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.7.0 (https://github.com/hruskin/ha-rohlik-ean)"

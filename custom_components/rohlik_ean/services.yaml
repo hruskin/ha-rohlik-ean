@@ -112,6 +112,44 @@ get_mappings:
   name: Get mappings
   description: Return all learned EAN → product mappings (used by the teaching panel).
 
+forget_eans:
+  name: Forget EANs (bulk)
+  description: Remove a batch of learned EAN → product mappings from the cache.
+  fields:
+    eans:
+      name: EANs
+      description: List of EANs to remove
+      required: true
+      example: '["8594001170012", "8594003964435"]'
+      selector:
+        object:
+
+search_products:
+  name: Search products
+  description: >-
+    Plain Rohlík.cz product search returning candidates. Does not touch the
+    pending queue (used by the teaching panel's edit flow).
+  fields:
+    name:
+      name: Product name
+      required: true
+      example: "Miil Tvaroh odtučněný"
+      selector:
+        text:
+
+get_product_images:
+  name: Get product images
+  description: >-
+    Resolve product IDs to image URLs via Rohlík's public product endpoint
+    (cached; used by the teaching panel).
+  fields:
+    product_ids:
+      name: Product IDs
+      required: true
+      example: "[711263, 1462148]"
+      selector:
+        object:
+
 discard_scan:
   name: Discard scan
   description: Drop a pending scan without learning anything.

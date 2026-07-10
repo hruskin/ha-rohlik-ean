@@ -5,7 +5,7 @@ platforms can import it without circular imports.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
@@ -22,6 +22,7 @@ from .const import (
     EVENT_ADD_FAILED,
     EVENT_MATCHED,
 )
+from .images import ImageCache
 from .pending import PendingQueue
 from .resolver import EanResolver
 
@@ -33,6 +34,7 @@ class RohlikEanData:
     hass: HomeAssistant
     resolver: EanResolver
     queue: PendingQueue
+    images: ImageCache = field(default_factory=ImageCache)
 
     async def async_confirm(
         self,

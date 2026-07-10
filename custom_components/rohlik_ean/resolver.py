@@ -108,6 +108,18 @@ class EanResolver:
             return True
         return False
 
+    async def async_forget_many(self, eans: list[str]) -> int:
+        """Delete a batch of mappings with one save and one change event."""
+        removed = 0
+        for ean in eans:
+            if ean in self._cache:
+                del self._cache[ean]
+                removed += 1
+        if removed:
+            await self._store.async_save(self._cache)
+            self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
+        return removed
+
     async def async_resolve(self, ean: str, bypass_cache: bool = False) -> Resolution:
         """Run the cascade for one EAN."""
         if not bypass_cache and (cached := self._cache.get(ean)):
@@ -273,4 +285,9 @@ class EanResolver:
     def _meta_dict(meta: EanMetadata | None) -> dict[str, Any] | None:
         if meta is None:
             return None
-        return {"name": meta.name, "brand": meta.brand, "quantity": meta.quantity}
+        return {
+            "name": meta.name,
+            "brand": meta.brand,
+            "quantity": meta.quantity,
+            "image": meta.image,
+        }
