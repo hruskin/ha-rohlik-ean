@@ -30,8 +30,8 @@ add_by_ean:
 confirm_match:
   name: Confirm match
   description: >-
-    Teach the integration an EAN → product mapping (stores it in the cache)
-    and optionally add the product to the cart.
+    Teach the integration an EAN → product mapping (stores it in the cache).
+    Teaching never touches the cart unless you explicitly pass quantity > 0.
   fields:
     ean:
       name: EAN
@@ -100,6 +100,21 @@ forget_ean:
     ean:
       name: EAN
       required: true
+      example: "8594001170012"
+      selector:
+        text:
+
+get_queue:
+  name: Get queue
+  description: Return all scans waiting for confirmation (used by the teaching panel).
+
+discard_scan:
+  name: Discard scan
+  description: Drop a pending scan without learning anything.
+  fields:
+    ean:
+      name: EAN
+      description: Scan to drop (default = the oldest one)
       example: "8594001170012"
       selector:
         text:

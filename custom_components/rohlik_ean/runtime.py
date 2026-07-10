@@ -113,9 +113,12 @@ class RohlikEanData:
         await self.queue.async_set_candidates(ean, candidates, quantity=quantity)
         return candidates
 
-    async def async_discard_current(self) -> dict | None:
-        """Drop the oldest pending scan without learning anything."""
-        item = await self.queue.async_pop_current()
+    async def async_discard(self, ean: str | None = None) -> dict | None:
+        """Drop a pending scan (oldest when no EAN given) without learning."""
+        if ean is None:
+            item = await self.queue.async_pop_current()
+        else:
+            item = await self.queue.async_remove(ean)
         if item:
             persistent_notification.async_dismiss(
                 self.hass, f"{DOMAIN}_{item['ean']}"

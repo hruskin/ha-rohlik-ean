@@ -24,4 +24,4 @@ class DiscardButton(RohlikEanEntity, ButtonEntity):
         super().__init__(entry, data, "discard")
 
     async def async_press(self) -> None:
-        await self._data.async_discard_current()
+        await self._data.async_discard()

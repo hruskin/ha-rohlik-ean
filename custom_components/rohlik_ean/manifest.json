@@ -4,10 +4,10 @@
   "after_dependencies": ["rohlikcz"],
   "codeowners": ["@hruskin"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/hruskin/ha-rohlik-ean",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/hruskin/ha-rohlik-ean/issues",
   "requirements": [],
-  "version": "0.4.3"
+  "version": "0.5.0"
 }

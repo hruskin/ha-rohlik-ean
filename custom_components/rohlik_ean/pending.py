@@ -7,7 +7,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
-from .const import QUEUE_STORAGE_KEY, SIGNAL_QUEUE_UPDATED, STORAGE_VERSION
+from .const import (
+    EVENT_QUEUE_CHANGED,
+    QUEUE_STORAGE_KEY,
+    SIGNAL_QUEUE_UPDATED,
+    STORAGE_VERSION,
+)
 
 
 class PendingQueue:
@@ -35,6 +40,10 @@ class PendingQueue:
     @property
     def eans(self) -> list[str]:
         return [item["ean"] for item in self._items]
+
+    @property
+    def items(self) -> list[dict[str, Any]]:
+        return list(self._items)
 
     async def async_push(self, item: dict[str, Any]) -> None:
         """Add a scan; a re-scan of the same EAN replaces the older entry."""
@@ -86,3 +95,5 @@ class PendingQueue:
     async def _save_and_notify(self) -> None:
         await self._store.async_save(self._items)
         async_dispatcher_send(self._hass, SIGNAL_QUEUE_UPDATED)
+        # Bus event so frontend code (the teaching panel) can refresh too.
+        self._hass.bus.async_fire(EVENT_QUEUE_CHANGED)

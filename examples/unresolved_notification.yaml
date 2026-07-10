@@ -83,8 +83,11 @@ automation:
     action:
       - variables:
           parts: "{{ trigger.event.data.action.split('_') }}"
+      # quantity: 0 = jen naučit mapování, do košíku se nepřidává.
+      # Nákup proběhne dalším skenem (už z cache). Chceš-li rovnou i koupit,
+      # dej quantity: "{{ parts[4] | int(1) }}".
       - service: rohlik_ean.confirm_match
         data:
           ean: "{{ parts[2] }}"
           product_id: "{{ parts[3] | int }}"
-          quantity: "{{ parts[4] | int(1) }}"
+          quantity: 0

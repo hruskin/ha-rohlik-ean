@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.components import persistent_notification
+from homeassistant.components.frontend import (
+    async_register_built_in_panel,
+    async_remove_panel,
+)
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -24,9 +30,13 @@ from .const import (
     DOMAIN,
     EVENT_MATCHED,
     EVENT_UNRESOLVED,
+    PANEL_JS_URL,
+    PANEL_URL_PATH,
     SERVICE_ADD_BY_EAN,
     SERVICE_CONFIRM_MATCH,
+    SERVICE_DISCARD_SCAN,
     SERVICE_FORGET_EAN,
+    SERVICE_GET_QUEUE,
     SERVICE_SEARCH_BY_NAME,
 )
 from .pending import PendingQueue
@@ -60,7 +70,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) ->
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass, data)
+    await _register_panel(hass)
     return True
+
+
+async def _register_panel(hass: HomeAssistant) -> None:
+    """Register the sidebar teaching panel (EAN → product table)."""
+    if not hass.data.setdefault(f"{DOMAIN}_static", False):
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    PANEL_JS_URL,
+                    str(Path(__file__).parent / "frontend" / "panel.js"),
+                    cache_headers=False,
+                )
+            ]
+        )
+        hass.data[f"{DOMAIN}_static"] = True
+    try:
+        async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title="Rohlík EAN",
+            sidebar_icon="mdi:barcode-scan",
+            frontend_url_path=PANEL_URL_PATH,
+            config={
+                "_panel_custom": {
+                    "name": "rohlik-ean-panel",
+                    "module_url": PANEL_JS_URL,
+                    "embed_iframe": False,
+                }
+            },
+            require_admin=False,
+        )
+    except ValueError:
+        # Panel already registered (reload) — that's fine.
+        pass
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -> bool:
@@ -68,11 +113,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data.pop(DOMAIN, None)
+        async_remove_panel(hass, PANEL_URL_PATH)
         for service in (
             SERVICE_ADD_BY_EAN,
             SERVICE_CONFIRM_MATCH,
             SERVICE_FORGET_EAN,
             SERVICE_SEARCH_BY_NAME,
+            SERVICE_GET_QUEUE,
+            SERVICE_DISCARD_SCAN,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -165,6 +213,16 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         )
         return {"candidates": candidates}
 
+    async def get_queue(call: ServiceCall) -> dict[str, Any]:
+        return {"items": data.queue.items}
+
+    async def discard_scan(call: ServiceCall) -> dict[str, Any]:
+        item = await data.async_discard(call.data.get(ATTR_EAN))
+        return {
+            "status": "discarded" if item else "not_found",
+            ATTR_EAN: item["ean"] if item else call.data.get(ATTR_EAN),
+        }
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_ADD_BY_EAN,
@@ -212,6 +270,20 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
                 vol.Optional(ATTR_QUANTITY): cv.positive_int,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_QUEUE,
+        get_queue,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DISCARD_SCAN,
+        discard_scan,
+        schema=vol.Schema({vol.Optional(ATTR_EAN): _EAN_SCHEMA}),
         supports_response=SupportsResponse.OPTIONAL,
     )
 
@@ -317,15 +389,10 @@ def _unresolved_message(resolution: Resolution, quantity: int) -> str:
                 f" – {candidate.get('price') or '?'} – ID `{candidate['id']}`{score}"
             )
         lines.append(
-            "\nVyber kandidáta v entitě **Kandidát** (select) na dashboardu,"
-            " nebo potvrď službou:\n"
-            "```yaml\n"
-            f"service: {DOMAIN}.{SERVICE_CONFIRM_MATCH}\n"
-            "data:\n"
-            f"  ean: \"{resolution.ean}\"\n"
-            f"  product_id: {resolution.candidates[0]['id'] if resolution.candidates else 0}\n"
-            f"  quantity: {quantity}\n"
-            "```"
+            "\nPřiřaď produkt v panelu **Rohlík EAN** (boční menu) nebo"
+            " v selectu Kandidát na dashboardu. Přiřazení pouze naučí"
+            " mapování — do košíku se nic nepřidává, nákup proběhne dalším"
+            " skenem."
         )
     else:
         if resolution.metadata:
@@ -339,16 +406,8 @@ def _unresolved_message(resolution: Resolution, quantity: int) -> str:
                 " privátních značek)."
             )
         lines.append(
-            "Zadej název produktu do pole **Hledat název** na dashboardu"
-            " (sken čeká ve frontě) a vyber z nabídnutých kandidátů."
-            " Alternativně nauč mapování službou (ID produktu je číslo v URL"
-            " na rohlik.cz):\n"
-            "```yaml\n"
-            f"service: {DOMAIN}.{SERVICE_CONFIRM_MATCH}\n"
-            "data:\n"
-            f"  ean: \"{resolution.ean}\"\n"
-            "  product_id: <ID produktu z URL na rohlik.cz>\n"
-            f"  quantity: {quantity}\n"
-            "```"
+            "Sken čeká ve frontě — otevři panel **Rohlík EAN** (boční"
+            " menu), vyhledej produkt názvem a přiřaď ho. Přiřazení pouze"
+            " naučí mapování; nákup proběhne dalším skenem."
         )
     return "\n".join(lines)

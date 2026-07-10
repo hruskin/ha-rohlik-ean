@@ -1,7 +1,8 @@
 """Select: pick the right Rohlík product for the scan waiting in the queue.
 
-Selecting an option IS the confirmation — it teaches the cache and adds
-the product to the cart with the originally requested quantity.
+Selecting an option IS the confirmation — it teaches the cache. It does
+NOT touch the cart: teaching and shopping are separate; scan the code
+again (now cached) to actually buy the product.
 """
 from __future__ import annotations
 
@@ -72,11 +73,12 @@ class CandidateSelect(RohlikEanEntity, SelectEntity):
         if current is not None and option != _EMPTY:
             for index, candidate in enumerate(current["candidates"], start=1):
                 if _format_option(index, candidate) == option:
+                    # quantity=0: teach the mapping only, never add to cart.
                     await self._data.async_confirm(
                         current["ean"],
                         candidate["id"],
                         name=candidate.get("name"),
-                        quantity=current["quantity"],
+                        quantity=0,
                     )
                     return
         _LOGGER.warning(

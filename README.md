@@ -20,9 +20,10 @@ Překladová kaskáda — zkouší se postupně, dokud něco nevrátí produkt:
    a kandidáti se skórují (shoda značky 0.4, gramáže 0.4, názvu 0.2).
    Bez ověřené gramáže se nikdy nepřidává automaticky (klasická past:
    200 g vs. 500 g varianta téhož jogurtu).
-4. **Ruční potvrzení** — sken se zařadí do potvrzovací fronty (entity na
-   dashboardu + notifikace); potvrzená volba se uloží do cache, takže
-   příště jede krok 1.
+4. **Ruční naučení** — sken se zařadí do fronty a naučíš ho v panelu
+   **Rohlík EAN** (boční menu). Učení pouze uloží mapování do cache —
+   **do košíku se při něm nic nepřidává**; nákup proběhne dalším skenem
+   (ten už jede krokem 1).
 
 ## Požadavky
 
@@ -69,7 +70,13 @@ košíku), takže jde použít pro hlasová oznámení — viz
 ### `rohlik_ean.confirm_match`
 
 Naučí integraci mapování EAN → produkt (`ean`, `product_id`, volitelně
-`name`); s `quantity > 0` produkt rovnou přidá do košíku.
+`name`). Učení do košíku nesahá; jen s explicitním `quantity > 0`
+produkt rovnou i přidá.
+
+### `rohlik_ean.get_queue` / `rohlik_ean.discard_scan`
+
+Vrátí celou frontu čekajících skenů / zahodí konkrétní sken (`ean`,
+bez něj nejstarší). Používá je učicí panel.
 
 ### `rohlik_ean.search_by_name`
 
@@ -81,6 +88,14 @@ pro potvrzení). Totéž, co dělá entita **Hledat název**.
 
 Smaže naučené mapování z cache (např. po chybném potvrzení).
 
+## Učicí panel
+
+Integrace přidává do bočního menu HA panel **Rohlík EAN**: tabulka
+čekajících kódů — vlevo EAN s nápovědou z OpenFoodFacts, vpravo hledání
+na Rohlíku a kandidáti k přiřazení jedním klikem. Přiřazení naučí
+mapování (bez košíku), řádek zmizí a panel se aktualizuje živě s každým
+novým skenem. Tlačítko Zahodit odstraní omylové skeny.
+
 ## Entity (potvrzovací fronta)
 
 Nerozpoznané skeny s kandidáty čekají v perzistentní frontě (přežije
@@ -89,8 +104,7 @@ restart HA) a integrace k ní vytváří zařízení **Rohlík EAN** s entitami:
 - **sensor Čeká na potvrzení** — počet čekajících skenů; atributy nesou
   EAN, metadata z OpenFoodFacts a kandidáty aktuálního (nejstaršího) skenu.
 - **select Kandidát** — kandidáti s plným názvem, gramáží a cenou.
-  Výběr možnosti = potvrzení: uloží mapování do cache a přidá produkt do
-  košíku v původně požadovaném množství.
+  Výběr možnosti = naučení mapování (do košíku se nepřidává).
 - **text Hledat název** — ruční hledání: napiš název produktu a Rohlík se
   jím prohledá; výsledky se nabídnou jako kandidáti aktuálního skenu.
   Nutné u produktů, které nezná OpenFoodFacts ani fulltext (privátní
