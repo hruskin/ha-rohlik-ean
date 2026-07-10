@@ -26,6 +26,7 @@ from .const import (
     CONF_TRUST_EAN_HIT,
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_TRUST_EAN_HIT,
+    EVENT_CACHE_CHANGED,
     ROHLIKCZ_DOMAIN,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -82,6 +83,11 @@ class EanResolver:
     def cached(self, ean: str) -> dict[str, Any] | None:
         return self._cache.get(ean)
 
+    @property
+    def mappings(self) -> dict[str, dict[str, Any]]:
+        """All learned EAN → product mappings."""
+        return dict(self._cache)
+
     async def async_remember(
         self, ean: str, product_id: int, name: str | None = None
     ) -> None:
@@ -92,11 +98,13 @@ class EanResolver:
             "cached_at": date.today().isoformat(),
         }
         await self._store.async_save(self._cache)
+        self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
 
     async def async_forget(self, ean: str) -> bool:
         if ean in self._cache:
             del self._cache[ean]
             await self._store.async_save(self._cache)
+            self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
             return True
         return False
 

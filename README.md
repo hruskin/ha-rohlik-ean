@@ -73,10 +73,10 @@ Naučí integraci mapování EAN → produkt (`ean`, `product_id`, volitelně
 `name`). Učení do košíku nesahá; jen s explicitním `quantity > 0`
 produkt rovnou i přidá.
 
-### `rohlik_ean.get_queue` / `rohlik_ean.discard_scan`
+### `rohlik_ean.get_queue` / `rohlik_ean.get_mappings` / `rohlik_ean.discard_scan`
 
-Vrátí celou frontu čekajících skenů / zahodí konkrétní sken (`ean`,
-bez něj nejstarší). Používá je učicí panel.
+Vrátí frontu čekajících skenů / celou naučenou databázi / zahodí
+konkrétní sken (`ean`, bez něj nejstarší). Používá je učicí panel.
 
 ### `rohlik_ean.search_by_name`
 
@@ -95,6 +95,10 @@ Integrace přidává do bočního menu HA panel **Rohlík EAN**: tabulka
 na Rohlíku a kandidáti k přiřazení jedním klikem. Přiřazení naučí
 mapování (bez košíku), řádek zmizí a panel se aktualizuje živě s každým
 novým skenem. Tlačítko Zahodit odstraní omylové skeny.
+
+Pod frontou je sekce **Naučené kódy**: celá databáze EAN → produkt
+s datem naučení, filtrováním podle EANu/názvu a mazáním jednotlivých
+mapování (např. po chybném přiřazení nebo změně produktu).
 
 ## Entity (potvrzovací fronta)
 

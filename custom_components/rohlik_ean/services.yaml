@@ -108,6 +108,10 @@ get_queue:
   name: Get queue
   description: Return all scans waiting for confirmation (used by the teaching panel).
 
+get_mappings:
+  name: Get mappings
+  description: Return all learned EAN → product mappings (used by the teaching panel).
+
 discard_scan:
   name: Discard scan
   description: Drop a pending scan without learning anything.

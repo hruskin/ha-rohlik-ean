@@ -7,10 +7,12 @@ class RohlikEanPanel extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._items = [];
+    this._mappings = {};
+    this._filter = "";
     this._busy = new Set();
     this._error = null;
     this._ready = false;
-    this._unsub = null;
+    this._unsubs = [];
   }
 
   set hass(hass) {
@@ -24,16 +26,20 @@ class RohlikEanPanel extends HTMLElement {
   }
 
   disconnectedCallback() {
-    if (this._unsub) {
-      this._unsub();
-      this._unsub = null;
-    }
+    for (const u of this._unsubs) u();
+    this._unsubs = [];
   }
 
   async _subscribe() {
-    this._unsub = await this._hass.connection.subscribeEvents(
-      () => this._load(),
-      "rohlik_ean_queue_changed"
+    this._unsubs.push(
+      await this._hass.connection.subscribeEvents(
+        () => this._load(),
+        "rohlik_ean_queue_changed"
+      ),
+      await this._hass.connection.subscribeEvents(
+        () => this._loadMappings(),
+        "rohlik_ean_cache_changed"
+      )
     );
   }
 
@@ -56,6 +62,28 @@ class RohlikEanPanel extends HTMLElement {
       this._error = e.message || String(e);
     }
     this._renderRows();
+    this._loadMappings();
+  }
+
+  async _loadMappings() {
+    try {
+      const r = await this._call("get_mappings", {}, true);
+      this._mappings = (r.response && r.response.mappings) || {};
+    } catch (e) {
+      this._error = e.message || String(e);
+    }
+    this._renderMappings();
+  }
+
+  async _forget(ean, name) {
+    if (!confirm(`Smazat naučené mapování ${ean} → ${name || "?"}?`)) return;
+    try {
+      await this._call("forget_ean", { ean });
+      this._error = null;
+    } catch (e) {
+      this._error = e.message || String(e);
+      this._loadMappings();
+    }
   }
 
   async _search(ean, name) {
@@ -133,12 +161,77 @@ class RohlikEanPanel extends HTMLElement {
         .cand button { padding:5px 10px; }
         .hint { color: var(--secondary-text-color); font-size:12px; font-style:italic; }
         .busy { opacity:.55; pointer-events:none; }
+        h2 { font-size: 17px; font-weight: 500; margin: 28px 0 10px; }
+        h2 .count { color: var(--secondary-text-color); font-weight: 400; font-size: 13px; }
+        .filter { width: 100%; box-sizing: border-box; padding:8px 10px; margin-bottom:10px;
+                  border-radius:8px; border:1px solid var(--divider-color,#ccc);
+                  background: var(--secondary-background-color, #fafafa); color: var(--primary-text-color); font-size:14px; }
+        .map { background: var(--card-background-color, #fff); border-radius:10px; padding:10px 14px; margin-bottom:8px;
+               box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0,0,0,.12));
+               display:grid; grid-template-columns: 160px 1fr 90px auto; gap:12px; align-items:center; }
+        @media (max-width: 720px) { .map { grid-template-columns: 1fr auto; } .map .dt { display:none; } }
+        .map .nm { font-size:13px; }
+        .map .pid { color: var(--secondary-text-color); font-size:12px; }
+        .map .dt { color: var(--secondary-text-color); font-size:12px; }
+        button.danger { background: transparent; color: var(--error-color, #db4437); border:1px solid var(--error-color, #db4437); }
       </style>
       <h1>Rohlík EAN — učení kódů</h1>
       <div class="sub">Přiřazení pouze naučí mapování EAN → produkt. Do košíku se nic nepřidává — nákup proběhne až dalším skenem.</div>
       <div id="error"></div>
       <div id="rows"></div>
+      <h2>Naučené kódy <span class="count" id="mcount"></span></h2>
+      <input class="filter" id="mfilter" placeholder="Filtrovat podle EANu nebo názvu…">
+      <div id="maps"></div>
     `;
+    this.shadowRoot.getElementById("mfilter").addEventListener("input", (ev) => {
+      this._filter = ev.target.value.trim().toLowerCase();
+      this._renderMappings();
+    });
+  }
+
+  _renderMappings() {
+    const count = this.shadowRoot.getElementById("mcount");
+    const root = this.shadowRoot.getElementById("maps");
+    if (!count || !root) return;
+
+    let entries = Object.entries(this._mappings);
+    count.textContent = `(${entries.length})`;
+    if (this._filter) {
+      entries = entries.filter(
+        ([ean, m]) =>
+          ean.includes(this._filter) ||
+          (m.name || "").toLowerCase().includes(this._filter)
+      );
+    }
+    // Nejnovější nahoře.
+    entries.sort((a, b) => (b[1].cached_at || "").localeCompare(a[1].cached_at || ""));
+
+    if (!entries.length) {
+      root.innerHTML = `<div class="hint" style="padding:4px 2px;">${
+        this._filter ? "Filtru nic neodpovídá." : "Zatím žádné naučené kódy."
+      }</div>`;
+      return;
+    }
+    root.innerHTML = "";
+    for (const [ean, m] of entries) {
+      const row = document.createElement("div");
+      row.className = "map";
+      const eanEl = document.createElement("span");
+      eanEl.className = "ean";
+      eanEl.textContent = ean;
+      const nm = document.createElement("span");
+      nm.className = "nm";
+      nm.innerHTML = `${this._esc(m.name || "(bez názvu)")} <span class="pid">· ID ${this._esc(m.product_id)}</span>`;
+      const dt = document.createElement("span");
+      dt.className = "dt";
+      dt.textContent = m.cached_at || "";
+      const del = document.createElement("button");
+      del.className = "danger";
+      del.textContent = "Smazat";
+      del.addEventListener("click", () => this._forget(ean, m.name));
+      row.append(eanEl, nm, dt, del);
+      root.appendChild(row);
+    }
   }
 
   _renderRows() {

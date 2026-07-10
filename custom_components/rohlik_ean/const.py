@@ -32,6 +32,7 @@ SERVICE_FORGET_EAN: Final = "forget_ean"
 SERVICE_SEARCH_BY_NAME: Final = "search_by_name"
 SERVICE_GET_QUEUE: Final = "get_queue"
 SERVICE_DISCARD_SCAN: Final = "discard_scan"
+SERVICE_GET_MAPPINGS: Final = "get_mappings"
 
 PANEL_URL_PATH: Final = "rohlik-ean"
 PANEL_JS_URL: Final = "/rohlik_ean_panel/panel.js"
@@ -40,9 +41,10 @@ EVENT_MATCHED: Final = f"{DOMAIN}_matched"
 EVENT_UNRESOLVED: Final = f"{DOMAIN}_unresolved"
 EVENT_ADD_FAILED: Final = f"{DOMAIN}_add_failed"
 EVENT_QUEUE_CHANGED: Final = f"{DOMAIN}_queue_changed"
+EVENT_CACHE_CHANGED: Final = f"{DOMAIN}_cache_changed"
 
 OFF_URL: Final = (
     "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
     "?fields=product_name,product_name_cs,brands,quantity"
 )
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.5.0 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.6.0 (https://github.com/hruskin/ha-rohlik-ean)"

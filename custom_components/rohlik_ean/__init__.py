@@ -36,6 +36,7 @@ from .const import (
     SERVICE_CONFIRM_MATCH,
     SERVICE_DISCARD_SCAN,
     SERVICE_FORGET_EAN,
+    SERVICE_GET_MAPPINGS,
     SERVICE_GET_QUEUE,
     SERVICE_SEARCH_BY_NAME,
 )
@@ -121,6 +122,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
             SERVICE_SEARCH_BY_NAME,
             SERVICE_GET_QUEUE,
             SERVICE_DISCARD_SCAN,
+            SERVICE_GET_MAPPINGS,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -216,6 +218,9 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
     async def get_queue(call: ServiceCall) -> dict[str, Any]:
         return {"items": data.queue.items}
 
+    async def get_mappings(call: ServiceCall) -> dict[str, Any]:
+        return {"mappings": data.resolver.mappings}
+
     async def discard_scan(call: ServiceCall) -> dict[str, Any]:
         item = await data.async_discard(call.data.get(ATTR_EAN))
         return {
@@ -276,6 +281,13 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         DOMAIN,
         SERVICE_GET_QUEUE,
         get_queue,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_MAPPINGS,
+        get_mappings,
         schema=vol.Schema({}),
         supports_response=SupportsResponse.ONLY,
     )
