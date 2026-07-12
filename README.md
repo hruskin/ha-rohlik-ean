@@ -126,12 +126,31 @@ restart HA) a integrace k ní vytváří zařízení **Rohlík EAN** s entitami:
 
 Hotová podmíněná karta: [examples/confirm_card.yaml](examples/confirm_card.yaml).
 
+## Záloha databáze na GitHub
+
+Naučená databáze se umí zálohovat do GitHub repa (soubor JSON, jeden
+commit na změnu). V možnostech integrace vyplň **repo** (`owner/repo`),
+**token** (fine-grained s právem Contents read/write na dané repo) a
+případně cestu k souboru. Pak:
+
+- **automatická záloha** — každá změna databáze se s ~minutovým odstupem
+  commitne (stejný obsah se necommituje),
+- **automatická obnova** — při startu s prázdnou databází (čerstvá
+  instalace) se záloha stáhne sama,
+- ručně: `rohlik_ean.backup_mappings` a `rohlik_ean.restore_mappings`
+  (`replace: true` nahradí celou lokální databázi zálohou; výchozí režim
+  jen doplní chybějící EANy).
+
+Token se ukládá lokálně v konfiguraci HA. Doporučené je privátní repo.
+
 ## Možnosti (Nastavit u integrace)
 
 - **Práh jistoty** (výchozí 0.75) — od jakého skóre se přidává automaticky.
 - **Věřit jedinému EAN hitu** (výchozí ano) — jediný výsledek fulltextu pro
   samotný EAN se bere jako přesná shoda.
 - **Notifikace pro nerozpoznané** (výchozí ano).
+- **GitHub záloha** — repo, token, cesta k souboru, automatická záloha
+  (viz výše).
 
 ## Příklady
 

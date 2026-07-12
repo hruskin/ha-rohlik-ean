@@ -16,9 +16,11 @@ from homeassistant.components.frontend import (
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, ServiceCall, SupportsResponse, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     ATTR_DRY_RUN,
@@ -28,14 +30,24 @@ from .const import (
     ATTR_PRODUCT_ID,
     ATTR_PRODUCT_IDS,
     ATTR_QUANTITY,
+    ATTR_REPLACE,
+    BACKUP_DEBOUNCE_SECONDS,
+    CONF_GITHUB_AUTO_BACKUP,
+    CONF_GITHUB_PATH,
+    CONF_GITHUB_REPO,
+    CONF_GITHUB_TOKEN,
     CONF_NOTIFY_UNRESOLVED,
+    DEFAULT_GITHUB_AUTO_BACKUP,
+    DEFAULT_GITHUB_PATH,
     DEFAULT_NOTIFY_UNRESOLVED,
     DOMAIN,
+    EVENT_CACHE_CHANGED,
     EVENT_MATCHED,
     EVENT_UNRESOLVED,
     PANEL_JS_URL,
     PANEL_URL_PATH,
     SERVICE_ADD_BY_EAN,
+    SERVICE_BACKUP_MAPPINGS,
     SERVICE_CONFIRM_MATCH,
     SERVICE_DISCARD_SCAN,
     SERVICE_FORGET_EAN,
@@ -43,9 +55,11 @@ from .const import (
     SERVICE_GET_MAPPINGS,
     SERVICE_GET_PRODUCT_IMAGES,
     SERVICE_GET_QUEUE,
+    SERVICE_RESTORE_MAPPINGS,
     SERVICE_SEARCH_BY_NAME,
     SERVICE_SEARCH_PRODUCTS,
 )
+from .github_sync import GitHubSync, GitHubSyncError
 from .pending import PendingQueue
 from .resolver import (
     STATUS_MATCHED,
@@ -78,7 +92,76 @@ async def async_setup_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) ->
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass, data)
     await _register_panel(hass)
+    await _setup_github_sync(hass, entry, data)
     return True
+
+
+def _github_sync(hass: HomeAssistant, entry: ConfigEntry) -> GitHubSync:
+    options = entry.options
+    return GitHubSync(
+        async_get_clientsession(hass),
+        options.get(CONF_GITHUB_REPO, ""),
+        options.get(CONF_GITHUB_TOKEN, ""),
+        options.get(CONF_GITHUB_PATH, DEFAULT_GITHUB_PATH),
+    )
+
+
+async def _setup_github_sync(
+    hass: HomeAssistant, entry: ConfigEntry, data: RohlikEanData
+) -> None:
+    """Auto-restore an empty database and auto-backup changes (debounced)."""
+    sync = _github_sync(hass, entry)
+
+    if sync.configured and not data.resolver.mappings:
+        try:
+            remote = await sync.async_fetch()
+            if remote:
+                imported = await data.resolver.async_import(remote)
+                _LOGGER.info(
+                    "Restored %d learned mappings from GitHub backup", imported
+                )
+        except GitHubSyncError as err:
+            _LOGGER.warning("GitHub restore skipped: %s", err)
+
+    cancel_pending: list[CALLBACK_TYPE] = []
+
+    async def _do_backup(_now) -> None:
+        cancel_pending.clear()
+        current = _github_sync(hass, entry)
+        if not current.configured:
+            return
+        try:
+            committed = await current.async_backup(data.resolver.mappings)
+            if committed:
+                _LOGGER.info(
+                    "Backed up %d learned mappings to GitHub",
+                    len(data.resolver.mappings),
+                )
+        except GitHubSyncError as err:
+            _LOGGER.warning("GitHub backup failed: %s", err)
+
+    @callback
+    def _schedule_backup(_event: Event) -> None:
+        if not entry.options.get(
+            CONF_GITHUB_AUTO_BACKUP, DEFAULT_GITHUB_AUTO_BACKUP
+        ):
+            return
+        for cancel in cancel_pending:
+            cancel()
+        cancel_pending.clear()
+        cancel_pending.append(
+            async_call_later(hass, BACKUP_DEBOUNCE_SECONDS, _do_backup)
+        )
+
+    entry.async_on_unload(hass.bus.async_listen(EVENT_CACHE_CHANGED, _schedule_backup))
+
+    @callback
+    def _cancel_all() -> None:
+        for cancel in cancel_pending:
+            cancel()
+        cancel_pending.clear()
+
+    entry.async_on_unload(_cancel_all)
 
 
 async def _register_panel(hass: HomeAssistant) -> None:
@@ -132,6 +215,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
             SERVICE_FORGET_EANS,
             SERVICE_SEARCH_PRODUCTS,
             SERVICE_GET_PRODUCT_IMAGES,
+            SERVICE_BACKUP_MAPPINGS,
+            SERVICE_RESTORE_MAPPINGS,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -246,6 +331,40 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         )
         return {"images": {str(pid): url for pid, url in images.items()}}
 
+    async def backup_mappings(call: ServiceCall) -> dict[str, Any]:
+        sync = _github_sync(hass, data.resolver.entry)
+        if not sync.configured:
+            raise HomeAssistantError(
+                "GitHub backup is not configured — set repo, token and path"
+                " in the integration options"
+            )
+        try:
+            committed = await sync.async_backup(resolver.mappings)
+        except GitHubSyncError as err:
+            raise HomeAssistantError(str(err)) from err
+        return {
+            "status": "backed_up" if committed else "unchanged",
+            "count": len(resolver.mappings),
+        }
+
+    async def restore_mappings(call: ServiceCall) -> dict[str, Any]:
+        sync = _github_sync(hass, data.resolver.entry)
+        if not sync.configured:
+            raise HomeAssistantError(
+                "GitHub backup is not configured — set repo, token and path"
+                " in the integration options"
+            )
+        try:
+            remote = await sync.async_fetch()
+        except GitHubSyncError as err:
+            raise HomeAssistantError(str(err)) from err
+        if remote is None:
+            return {"status": "no_backup", "imported": 0}
+        imported = await resolver.async_import(
+            remote, replace=call.data[ATTR_REPLACE]
+        )
+        return {"status": "restored", "imported": imported}
+
     async def discard_scan(call: ServiceCall) -> dict[str, Any]:
         item = await data.async_discard(call.data.get(ATTR_EAN))
         return {
@@ -344,6 +463,20 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
             }
         ),
         supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_BACKUP_MAPPINGS,
+        backup_mappings,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESTORE_MAPPINGS,
+        restore_mappings,
+        schema=vol.Schema({vol.Optional(ATTR_REPLACE, default=False): cv.boolean}),
+        supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,

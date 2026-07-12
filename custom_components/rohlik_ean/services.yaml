@@ -137,6 +137,23 @@ search_products:
       selector:
         text:
 
+backup_mappings:
+  name: Backup mappings
+  description: Commit the learned EAN database to the configured GitHub repo.
+
+restore_mappings:
+  name: Restore mappings
+  description: >-
+    Import the learned EAN database from the configured GitHub repo.
+    By default only fills EANs missing locally.
+  fields:
+    replace:
+      name: Replace
+      description: Replace the whole local database with the backup
+      default: false
+      selector:
+        boolean:
+
 get_product_images:
   name: Get product images
   description: >-

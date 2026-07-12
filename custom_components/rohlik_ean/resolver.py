@@ -108,6 +108,31 @@ class EanResolver:
             return True
         return False
 
+    async def async_import(self, mappings: dict[str, Any], replace: bool = False) -> int:
+        """Import mappings (from a GitHub backup); returns how many changed.
+
+        replace=False only fills EANs missing locally; replace=True swaps
+        the whole database for the imported one.
+        """
+        valid = {
+            ean: entry
+            for ean, entry in mappings.items()
+            if isinstance(entry, dict) and entry.get("product_id")
+        }
+        if replace:
+            changed = 0 if valid == self._cache else len(valid)
+            self._cache = valid
+        else:
+            changed = 0
+            for ean, entry in valid.items():
+                if ean not in self._cache:
+                    self._cache[ean] = entry
+                    changed += 1
+        if changed:
+            await self._store.async_save(self._cache)
+            self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
+        return changed
+
     async def async_forget_many(self, eans: list[str]) -> int:
         """Delete a batch of mappings with one save and one change event."""
         removed = 0
