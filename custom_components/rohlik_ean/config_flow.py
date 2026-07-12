@@ -25,6 +25,8 @@ from .const import (
     CONF_GITHUB_REPO,
     CONF_GITHUB_TOKEN,
     CONF_NOTIFY_UNRESOLVED,
+    CONF_OFF_PASSWORD,
+    CONF_OFF_USER,
     CONF_TRUST_EAN_HIT,
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_GITHUB_AUTO_BACKUP,
@@ -111,6 +113,18 @@ class RohlikEanOptionsFlow(OptionsFlow):
                         CONF_GITHUB_AUTO_BACKUP, DEFAULT_GITHUB_AUTO_BACKUP
                     ),
                 ): bool,
+                vol.Optional(
+                    CONF_OFF_USER,
+                    description={
+                        "suggested_value": options.get(CONF_OFF_USER, "")
+                    },
+                ): str,
+                vol.Optional(
+                    CONF_OFF_PASSWORD,
+                    description={
+                        "suggested_value": options.get(CONF_OFF_PASSWORD, "")
+                    },
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

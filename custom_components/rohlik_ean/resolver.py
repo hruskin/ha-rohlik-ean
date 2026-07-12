@@ -100,6 +100,13 @@ class EanResolver:
         await self._store.async_save(self._cache)
         self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
 
+    async def async_mark_contributed(self, ean: str) -> None:
+        """Flag a mapping as contributed to OpenFoodFacts."""
+        if ean in self._cache:
+            self._cache[ean]["off_contributed"] = date.today().isoformat()
+            await self._store.async_save(self._cache)
+            self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
+
     async def async_forget(self, ean: str) -> bool:
         if ean in self._cache:
             del self._cache[ean]

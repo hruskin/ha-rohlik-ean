@@ -77,10 +77,29 @@ class RohlikEanPanel extends HTMLElement {
     try {
       const r = await this._call("get_mappings", {}, true);
       this._mappings = (r.response && r.response.mappings) || {};
+      this._offEnabled = !!(r.response && r.response.off_enabled);
     } catch (e) {
       this._error = e.message || String(e);
     }
     this._renderMappings();
+  }
+
+  async _contribute(ean) {
+    this._busy.add(ean);
+    this._renderMappings();
+    try {
+      const r = await this._call("contribute_to_off", { ean }, true);
+      const resp = (r && r.response) || {};
+      if (resp.failed && resp.failed[ean]) {
+        this._error = `OFF: ${resp.failed[ean]}`;
+      } else {
+        this._error = null;
+      }
+    } catch (e) {
+      this._error = e.message || String(e);
+    }
+    this._busy.delete(ean);
+    this._loadMappings();
   }
 
   _collectImageIds() {
@@ -259,7 +278,9 @@ class RohlikEanPanel extends HTMLElement {
         .map .nm { font-size:13px; }
         .map .pid { color: var(--secondary-text-color); font-size:12px; }
         .map .dt { color: var(--secondary-text-color); font-size:12px; }
-        .map .acts { display:flex; gap:6px; }
+        .map .acts { display:flex; gap:6px; align-items:center; }
+        .offok { color: var(--secondary-text-color); font-size:11px; white-space:nowrap;
+                 border:1px solid var(--divider-color,#e0e0e0); border-radius:6px; padding:3px 6px; }
         .editbox { margin-top:10px; padding-top:10px; border-top:1px solid var(--divider-color,#e0e0e0); }
         input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
       </style>
@@ -471,6 +492,20 @@ class RohlikEanPanel extends HTMLElement {
 
       const acts = document.createElement("div");
       acts.className = "acts";
+      if (m.off_contributed) {
+        const badge = document.createElement("span");
+        badge.className = "offok";
+        badge.textContent = "OFF ✓";
+        badge.title = `Odesláno do OpenFoodFacts ${m.off_contributed}`;
+        acts.appendChild(badge);
+      } else if (this._offEnabled) {
+        const off = document.createElement("button");
+        off.className = "ghost";
+        off.textContent = "→ OFF";
+        off.title = "Odeslat název/značku/gramáž do OpenFoodFacts";
+        off.addEventListener("click", () => this._contribute(ean));
+        acts.appendChild(off);
+      }
       const edit = document.createElement("button");
       edit.className = "ghost";
       edit.textContent = this._editing === ean ? "Zavřít" : "Upravit";

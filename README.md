@@ -147,6 +147,20 @@ případně cestu k souboru. Pak:
 
 Token se ukládá lokálně v konfiguraci HA. Doporučené je privátní repo.
 
+## Přispívání do OpenFoodFacts
+
+Kódy, které učíš ručně, jsou přesně ty, co v OpenFoodFacts chybí — a ty
+je můžeš komunitě vrátit. Po vyplnění **OFF účtu** (uživatel + heslo,
+účet zdarma na openfoodfacts.org) se v panelu u naučených kódů objeví
+tlačítko **→ OFF**: odešle název, značku a gramáž (z veřejných dat
+Rohlíku) pod tvým účtem. Odeslané kódy nesou štítek „OFF ✓" a znovu se
+neposílají; před odesláním se ověří, že kód v OFF mezitím někdo
+nezaložil (cizí data se nepřepisují). **Fotky se neodesílají nikdy** —
+k produktovým snímkům Rohlíku nemáme práva.
+
+Hromadně: služba `rohlik_ean.contribute_to_off` (bez `ean` odešle
+všechny dosud neodeslané, max 20 na volání).
+
 ## Možnosti (Nastavit u integrace)
 
 - **Práh jistoty** (výchozí 0.75) — od jakého skóre se přidává automaticky.
@@ -155,6 +169,8 @@ Token se ukládá lokálně v konfiguraci HA. Doporučené je privátní repo.
 - **Notifikace pro nerozpoznané** (výchozí ano).
 - **GitHub záloha** — repo, token, cesta k souboru, automatická záloha
   (viz výše).
+- **OpenFoodFacts účet** — uživatel + heslo pro přispívání naučených
+  kódů (viz výše).
 
 ## Příklady
 

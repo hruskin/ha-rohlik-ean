@@ -21,7 +21,9 @@
           "github_repo": "GitHub repo pro zálohu (owner/repo, prázdné = vypnuto)",
           "github_token": "GitHub token (scope repo)",
           "github_path": "Cesta k souboru zálohy v repu",
-          "github_auto_backup": "Zálohovat automaticky při každé změně databáze"
+          "github_auto_backup": "Zálohovat automaticky při každé změně databáze",
+          "off_user": "Uživatelské jméno OpenFoodFacts (pro přispívání naučených kódů)",
+          "off_password": "Heslo OpenFoodFacts"
         }
       }
     }

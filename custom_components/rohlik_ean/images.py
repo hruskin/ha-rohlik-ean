@@ -39,17 +39,30 @@ class ImageCache:
     async def _async_fetch(
         self, session: aiohttp.ClientSession, pid: int
     ) -> str | None:
-        try:
-            async with session.get(
-                PRODUCT_URL.format(pid=pid),
-                headers={"User-Agent": OFF_USER_AGENT},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                if response.status != 200:
-                    return None
-                data = await response.json()
-        except (aiohttp.ClientError, TimeoutError) as err:
-            _LOGGER.debug("Image lookup for product %s failed: %s", pid, err)
-            return None
-        images = data.get("images") or []
-        return images[0] if images else None
+        info = await fetch_product_info(session, pid)
+        return info.get("image") if info else None
+
+
+async def fetch_product_info(
+    session: aiohttp.ClientSession, pid: int
+) -> dict | None:
+    """Fetch name/brand/amount/image from Rohlík's public product endpoint."""
+    try:
+        async with session.get(
+            PRODUCT_URL.format(pid=pid),
+            headers={"User-Agent": OFF_USER_AGENT},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
+            if response.status != 200:
+                return None
+            data = await response.json()
+    except (aiohttp.ClientError, TimeoutError) as err:
+        _LOGGER.debug("Product lookup for %s failed: %s", pid, err)
+        return None
+    images = data.get("images") or []
+    return {
+        "name": data.get("name"),
+        "brand": data.get("brand"),
+        "amount": data.get("textualAmount"),
+        "image": images[0] if images else None,
+    }

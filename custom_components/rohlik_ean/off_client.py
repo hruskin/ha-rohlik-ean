@@ -6,9 +6,13 @@ from dataclasses import dataclass
 
 import aiohttp
 
-from .const import OFF_URL, OFF_USER_AGENT
+from .const import OFF_URL, OFF_USER_AGENT, OFF_WRITE_URL
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class OFFContributeError(Exception):
+    """Writing a product to OpenFoodFacts failed."""
 
 
 @dataclass(slots=True)
@@ -56,3 +60,49 @@ async def fetch_metadata(session: aiohttp.ClientSession, ean: str) -> EanMetadat
     if not meta.search_query:
         return None
     return meta
+
+
+async def contribute_product(
+    session: aiohttp.ClientSession,
+    user_id: str,
+    password: str,
+    ean: str,
+    name: str | None = None,
+    brand: str | None = None,
+    quantity: str | None = None,
+) -> None:
+    """Create/extend an OpenFoodFacts product with textual facts.
+
+    Only name/brand/quantity — never images (Rohlík's photos are not ours
+    to license).
+    """
+    form = {
+        "code": ean,
+        "user_id": user_id,
+        "password": password,
+        "lc": "cs",
+        "lang": "cs",
+    }
+    if name:
+        form["product_name"] = name
+    if brand:
+        form["brands"] = brand
+    if quantity:
+        form["quantity"] = quantity
+
+    try:
+        async with session.post(
+            OFF_WRITE_URL,
+            data=form,
+            headers={"User-Agent": OFF_USER_AGENT},
+            timeout=aiohttp.ClientTimeout(total=20),
+        ) as response:
+            response.raise_for_status()
+            payload = await response.json(content_type=None)
+    except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+        raise OFFContributeError(f"OpenFoodFacts unreachable: {err}") from err
+
+    if payload.get("status") != 1:
+        raise OFFContributeError(
+            payload.get("status_verbose") or "unknown OpenFoodFacts error"
+        )

@@ -154,6 +154,21 @@ restore_mappings:
       selector:
         boolean:
 
+contribute_to_off:
+  name: Contribute to OpenFoodFacts
+  description: >-
+    Send learned codes OpenFoodFacts does not know yet (name, brand and
+    quantity from Rohlík's public product data) to OpenFoodFacts under the
+    configured account. Without an EAN, contributes all not-yet-contributed
+    mappings (max 20 per call). Never uploads images.
+  fields:
+    ean:
+      name: EAN
+      description: Single learned mapping to contribute (default = all pending)
+      example: "8594001170012"
+      selector:
+        text:
+
 get_product_images:
   name: Get product images
   description: >-

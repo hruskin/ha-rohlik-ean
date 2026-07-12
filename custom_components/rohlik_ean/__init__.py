@@ -17,7 +17,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, ServiceCall, SupportsResponse, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
@@ -37,6 +37,8 @@ from .const import (
     CONF_GITHUB_REPO,
     CONF_GITHUB_TOKEN,
     CONF_NOTIFY_UNRESOLVED,
+    CONF_OFF_PASSWORD,
+    CONF_OFF_USER,
     DEFAULT_GITHUB_AUTO_BACKUP,
     DEFAULT_GITHUB_PATH,
     DEFAULT_NOTIFY_UNRESOLVED,
@@ -49,6 +51,7 @@ from .const import (
     SERVICE_ADD_BY_EAN,
     SERVICE_BACKUP_MAPPINGS,
     SERVICE_CONFIRM_MATCH,
+    SERVICE_CONTRIBUTE_TO_OFF,
     SERVICE_DISCARD_SCAN,
     SERVICE_FORGET_EAN,
     SERVICE_FORGET_EANS,
@@ -60,6 +63,8 @@ from .const import (
     SERVICE_SEARCH_PRODUCTS,
 )
 from .github_sync import GitHubSync, GitHubSyncError
+from .images import fetch_product_info
+from .off_client import OFFContributeError, contribute_product, fetch_metadata
 from .pending import PendingQueue
 from .resolver import (
     STATUS_MATCHED,
@@ -217,6 +222,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
             SERVICE_GET_PRODUCT_IMAGES,
             SERVICE_BACKUP_MAPPINGS,
             SERVICE_RESTORE_MAPPINGS,
+            SERVICE_CONTRIBUTE_TO_OFF,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -324,8 +330,73 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
     async def get_queue(call: ServiceCall) -> dict[str, Any]:
         return {"items": data.queue.items}
 
+    def _off_credentials() -> tuple[str, str]:
+        options = data.resolver.entry.options
+        return options.get(CONF_OFF_USER, ""), options.get(CONF_OFF_PASSWORD, "")
+
     async def get_mappings(call: ServiceCall) -> dict[str, Any]:
-        return {"mappings": data.resolver.mappings}
+        user, password = _off_credentials()
+        return {
+            "mappings": data.resolver.mappings,
+            "off_enabled": bool(user and password),
+        }
+
+    async def contribute_to_off(call: ServiceCall) -> dict[str, Any]:
+        user, password = _off_credentials()
+        if not (user and password):
+            raise HomeAssistantError(
+                "OpenFoodFacts credentials are not configured — set user"
+                " and password in the integration options"
+            )
+        mappings = resolver.mappings
+        if ean := call.data.get(ATTR_EAN):
+            if ean not in mappings:
+                raise ServiceValidationError(f"EAN {ean} is not a learned mapping")
+            targets = [ean]
+        else:
+            targets = [
+                e for e, m in mappings.items() if not m.get("off_contributed")
+            ][:20]
+
+        session = async_get_clientsession(hass)
+        contributed: list[str] = []
+        already_known: list[str] = []
+        failed: dict[str, str] = {}
+        for target in targets:
+            mapping = mappings[target]
+            if mapping.get("off_contributed"):
+                continue
+            # Someone may have created the product meanwhile — don't
+            # overwrite other people's data.
+            if await fetch_metadata(session, target):
+                await resolver.async_mark_contributed(target)
+                already_known.append(target)
+                continue
+            info = await fetch_product_info(session, mapping["product_id"])
+            if not info or not info.get("name"):
+                failed[target] = "product details unavailable on Rohlík"
+                continue
+            try:
+                await contribute_product(
+                    session,
+                    user,
+                    password,
+                    target,
+                    name=info["name"],
+                    brand=info.get("brand"),
+                    quantity=info.get("amount"),
+                )
+            except OFFContributeError as err:
+                failed[target] = str(err)
+                continue
+            await resolver.async_mark_contributed(target)
+            contributed.append(target)
+            _LOGGER.info("Contributed EAN %s (%s) to OpenFoodFacts", target, info["name"])
+        return {
+            "contributed": contributed,
+            "already_known": already_known,
+            "failed": failed,
+        }
 
     async def forget_eans(call: ServiceCall) -> dict[str, Any]:
         removed = await resolver.async_forget_many(call.data[ATTR_EANS])
@@ -488,6 +559,13 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         SERVICE_RESTORE_MAPPINGS,
         restore_mappings,
         schema=vol.Schema({vol.Optional(ATTR_REPLACE, default=False): cv.boolean}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CONTRIBUTE_TO_OFF,
+        contribute_to_off,
+        schema=vol.Schema({vol.Optional(ATTR_EAN): _EAN_SCHEMA}),
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
