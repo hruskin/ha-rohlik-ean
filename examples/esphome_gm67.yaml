@@ -5,8 +5,7 @@
 # Zapojení GM67 (UART TTL, 9600 baud): TX čtečky → GPIO16, RX → GPIO17
 # (uprav podle svého zapojení; viz MattFryer/HA-Mealie-Barcode-Scanner).
 #
-# V integraci Rohlík EAN pak nastav „Okno slučování skenů" na 0 —
-# slučuje už čtečka, integrace přidá okamžitě.
+# Integrace Rohlík EAN pak jen přidá `quantity` kusů jedním zápisem.
 
 substitutions:
   aggregation_window: 3s   # ticho po posledním skenu, než se odešle event

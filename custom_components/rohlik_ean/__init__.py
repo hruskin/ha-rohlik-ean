@@ -37,11 +37,9 @@ from .const import (
     CONF_GITHUB_REPO,
     CONF_GITHUB_TOKEN,
     CONF_NOTIFY_UNRESOLVED,
-    CONF_SCAN_AGGREGATION,
     DEFAULT_GITHUB_AUTO_BACKUP,
     DEFAULT_GITHUB_PATH,
     DEFAULT_NOTIFY_UNRESOLVED,
-    DEFAULT_SCAN_AGGREGATION,
     DOMAIN,
     EVENT_CACHE_CHANGED,
     EVENT_MATCHED,
@@ -287,55 +285,10 @@ async def _finalize_add(
 def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
     resolver = data.resolver
 
-    # Rapid repeated scans of the same EAN aggregate into a single cart
-    # add: ean -> {"quantity", "resolution", "cancel"}.
-    pending_adds: dict[str, dict[str, Any]] = {}
-
-    def _aggregation_window() -> int:
-        return data.resolver.entry.options.get(
-            CONF_SCAN_AGGREGATION, DEFAULT_SCAN_AGGREGATION
-        )
-
-    def _schedule_flush(ean: str, window: int) -> CALLBACK_TYPE:
-        async def _flush(_now) -> None:
-            item = pending_adds.pop(ean, None)
-            # Skip when the integration was reloaded while we waited.
-            if item is None or hass.data.get(DOMAIN) is not data:
-                return
-            try:
-                await _finalize_add(hass, data, item["resolution"], item["quantity"])
-            except HomeAssistantError as err:
-                _LOGGER.error("Aggregated add for EAN %s failed: %s", ean, err)
-
-        return async_call_later(hass, window, _flush)
-
-    def _bump_pending(ean: str, quantity: int, window: int) -> dict[str, Any]:
-        item = pending_adds[ean]
-        item["quantity"] += quantity
-        item["cancel"]()
-        item["cancel"] = _schedule_flush(ean, window)
-        resolution: Resolution = item["resolution"]
-        return {
-            "status": STATUS_MATCHED,
-            ATTR_EAN: ean,
-            "source": resolution.source,
-            "confidence": resolution.confidence,
-            "product": resolution.product,
-            "added": False,
-            "aggregating": True,
-            "queued_quantity": item["quantity"],
-        }
-
     async def add_by_ean(call: ServiceCall) -> dict[str, Any]:
         ean: str = call.data[ATTR_EAN]
         quantity: int = call.data[ATTR_QUANTITY]
         dry_run: bool = call.data[ATTR_DRY_RUN]
-        window = _aggregation_window()
-
-        # Repeated scan while a previous one is still waiting: just bump
-        # the quantity and reset the timer — no resolving needed.
-        if not dry_run and ean in pending_adds:
-            return _bump_pending(ean, quantity, window)
 
         resolution = await resolver.async_resolve(ean)
         if resolution.status != STATUS_MATCHED:
@@ -344,29 +297,7 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
             return _report_matched(
                 hass, resolution, quantity, added=False, fire_event=False
             )
-        if window <= 0:
-            return await _finalize_add(hass, data, resolution, quantity)
-
-        # Another scan of the same EAN may have started aggregating while
-        # we were resolving (await above) — join it instead of overwriting.
-        if ean in pending_adds:
-            return _bump_pending(ean, quantity, window)
-
-        pending_adds[ean] = {
-            "quantity": quantity,
-            "resolution": resolution,
-            "cancel": _schedule_flush(ean, window),
-        }
-        return {
-            "status": STATUS_MATCHED,
-            ATTR_EAN: ean,
-            "source": resolution.source,
-            "confidence": resolution.confidence,
-            "product": resolution.product,
-            "added": False,
-            "aggregating": True,
-            "queued_quantity": quantity,
-        }
+        return await _finalize_add(hass, data, resolution, quantity)
 
     async def confirm_match(call: ServiceCall) -> dict[str, Any]:
         ean: str = call.data[ATTR_EAN]
