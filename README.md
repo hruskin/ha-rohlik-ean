@@ -48,6 +48,13 @@ Překladová kaskáda — zkouší se postupně, dokud něco nevrátí produkt:
 | `quantity` | volitelné | počet kusů, výchozí 1 |
 | `dry_run` | volitelné | jen vyhledat, nepřidávat do košíku |
 
+**Slučování opakovaných skenů:** stejný kód pípnutý vícekrát rychle za
+sebou (výchozí okno 4 s od posledního skenu) se sloučí do jednoho
+přidání — 5 pípnutí = 5 ks jedním zápisem do košíku a jediné oznámení.
+Event `rohlik_ean_matched` se vystřelí až po uplynutí okna s celkovým
+množstvím; průběžné odpovědi služby mají `aggregating: true` a
+`queued_quantity`. Okno jde změnit/vypnout v možnostech integrace.
+
 Vrací response data (`status`, `product`, `confidence`, `candidates`, …)
 a vystřelí event:
 
@@ -149,6 +156,8 @@ Token se ukládá lokálně v konfiguraci HA. Doporučené je privátní repo.
 - **Věřit jedinému EAN hitu** (výchozí ano) — jediný výsledek fulltextu pro
   samotný EAN se bere jako přesná shoda.
 - **Notifikace pro nerozpoznané** (výchozí ano).
+- **Okno slučování skenů** (výchozí 4 s, 0 = vypnuto) — opakované skeny
+  téhož kódu se sloučí do jednoho přidání.
 - **GitHub záloha** — repo, token, cesta k souboru, automatická záloha
   (viz výše).
 

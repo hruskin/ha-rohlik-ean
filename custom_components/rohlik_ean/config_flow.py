@@ -20,6 +20,8 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_CONFIDENCE_THRESHOLD,
+    CONF_SCAN_AGGREGATION,
+    DEFAULT_SCAN_AGGREGATION,
     CONF_GITHUB_AUTO_BACKUP,
     CONF_GITHUB_PATH,
     CONF_GITHUB_REPO,
@@ -89,6 +91,12 @@ class RohlikEanOptionsFlow(OptionsFlow):
                         CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED
                     ),
                 ): bool,
+                vol.Optional(
+                    CONF_SCAN_AGGREGATION,
+                    default=options.get(
+                        CONF_SCAN_AGGREGATION, DEFAULT_SCAN_AGGREGATION
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=30)),
                 vol.Optional(
                     CONF_GITHUB_REPO,
                     description={

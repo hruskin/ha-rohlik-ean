@@ -19,6 +19,7 @@ CONF_GITHUB_REPO: Final = "github_repo"
 CONF_GITHUB_TOKEN: Final = "github_token"
 CONF_GITHUB_PATH: Final = "github_path"
 CONF_GITHUB_AUTO_BACKUP: Final = "github_auto_backup"
+CONF_SCAN_AGGREGATION: Final = "scan_aggregation_seconds"
 
 DEFAULT_CONFIDENCE_THRESHOLD: Final = 0.75
 DEFAULT_TRUST_EAN_HIT: Final = True
@@ -26,6 +27,7 @@ DEFAULT_NOTIFY_UNRESOLVED: Final = True
 DEFAULT_GITHUB_PATH: Final = "rohlik-ean-mappings.json"
 DEFAULT_GITHUB_AUTO_BACKUP: Final = True
 BACKUP_DEBOUNCE_SECONDS: Final = 60
+DEFAULT_SCAN_AGGREGATION: Final = 4
 
 ATTR_EAN: Final = "ean"
 ATTR_EANS: Final = "eans"
@@ -63,4 +65,4 @@ OFF_URL: Final = (
     "https://world.openfoodfacts.org/api/v2/product/{ean}.json"
     "?fields=product_name,product_name_cs,brands,quantity,image_front_small_url"
 )
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.8.0 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.9.0 (https://github.com/hruskin/ha-rohlik-ean)"
