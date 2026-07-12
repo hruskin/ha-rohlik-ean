@@ -173,6 +173,9 @@ Token se ukládá lokálně v konfiguraci HA. Doporučené je privátní repo.
   výsledku skenu přes TTS (Google Nest apod.)
 - [examples/barcode_scanner.yaml](examples/barcode_scanner.yaml) — napojení
   hardwarové čtečky ESP32 + GM67 (fáze 2)
+- [examples/esphome_gm67.yaml](examples/esphome_gm67.yaml) — ESPHome
+  konfigurace čtečky s agregací opakovaných skenů přímo na zařízení
+  (event nese `barcode` + `quantity`; okno v integraci pak nastav na 0)
 
 ## Omezení
 

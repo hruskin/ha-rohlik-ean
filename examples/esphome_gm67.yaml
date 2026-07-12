@@ -1,0 +1,87 @@
+# Fáze 2 — čtečka ESP32 + GM67 (UART) s agregací opakovaných skenů
+# přímo na zařízení: stejný kód pípnutý vícekrát rychle za sebou pošle
+# do HA JEDEN event `esphome.barcode_scan` s polem `quantity`.
+#
+# Zapojení GM67 (UART TTL, 9600 baud): TX čtečky → GPIO16, RX → GPIO17
+# (uprav podle svého zapojení; viz MattFryer/HA-Mealie-Barcode-Scanner).
+#
+# V integraci Rohlík EAN pak nastav „Okno slučování skenů" na 0 —
+# slučuje už čtečka, integrace přidá okamžitě.
+
+substitutions:
+  aggregation_window: 3s   # ticho po posledním skenu, než se odešle event
+
+esphome:
+  name: rohlik-ctecka
+  friendly_name: Rohlík čtečka
+
+esp32:
+  board: esp32dev
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+logger:
+ota:
+  platform: esphome
+
+uart:
+  id: uart_gm67
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+
+globals:
+  - id: last_code
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: scan_count
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+script:
+  # mode: restart — každý další sken téhož kódu okno resetuje.
+  - id: flush_scan
+    mode: restart
+    then:
+      - delay: ${aggregation_window}
+      - homeassistant.event:
+          event: esphome.barcode_scan
+          data:
+            barcode: !lambda "return id(last_code);"
+            quantity: !lambda "return to_string(id(scan_count));"
+      - lambda: |-
+          id(last_code) = "";
+          id(scan_count) = 0;
+
+text_sensor:
+  # GM67 posílá načtený kód jako řádek ukončený \r\n.
+  - platform: uart
+    uart_id: uart_gm67
+    name: "Poslední kód"
+    id: barcode_raw
+    internal: true
+    on_value:
+      then:
+        # Jiný kód, než jaký se právě sčítá → předchozí ihned odeslat.
+        - if:
+            condition:
+              lambda: "return !id(last_code).empty() && id(last_code) != x;"
+            then:
+              - homeassistant.event:
+                  event: esphome.barcode_scan
+                  data:
+                    barcode: !lambda "return id(last_code);"
+                    quantity: !lambda "return to_string(id(scan_count));"
+              - lambda: |-
+                  id(last_code) = x;
+                  id(scan_count) = 1;
+            else:
+              - lambda: |-
+                  if (id(last_code) == x) id(scan_count) += 1;
+                  else { id(last_code) = x; id(scan_count) = 1; }
+        - script.execute: flush_scan
