@@ -18,6 +18,7 @@
           "confidence_threshold": "Práh jistoty pro automatické přidání (0.5–1.0)",
           "trust_ean_hit": "Věřit jedinému výsledku fulltextu Rohlíku pro samotný EAN",
           "notify_unresolved": "Vytvářet trvalou notifikaci pro nerozpoznané EANy",
+          "review_mode": "Nákupní seznam: skeny se řadí do seznamu místo přímého přidání do košíku",
           "off_user": "Uživatelské jméno OpenFoodFacts (pro přispívání naučených kódů)",
           "off_password": "Heslo OpenFoodFacts"
         }
@@ -26,7 +27,11 @@
   },
   "entity": {
     "sensor": {
-      "pending": { "name": "Čeká na potvrzení" }
+      "pending": { "name": "Čeká na potvrzení" },
+      "review": { "name": "Nákupní seznam" },
+      "learned": { "name": "Naučené kódy" },
+      "contributed": { "name": "Přispěno do OFF" },
+      "scans_today": { "name": "Skenů dnes" }
     },
     "select": {
       "candidate": { "name": "Kandidát" }

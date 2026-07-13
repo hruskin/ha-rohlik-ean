@@ -8,6 +8,8 @@ class RohlikEanPanel extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._items = [];
+    this._review = [];
+    this._reviewTotal = 0;
     this._mappings = {};
     this._filter = "";
     this._selected = new Set();
@@ -45,6 +47,10 @@ class RohlikEanPanel extends HTMLElement {
       await this._hass.connection.subscribeEvents(
         () => this._loadMappings(),
         "rohlik_ean_cache_changed"
+      ),
+      await this._hass.connection.subscribeEvents(
+        () => this._loadReview(),
+        "rohlik_ean_review_changed"
       )
     );
   }
@@ -70,7 +76,61 @@ class RohlikEanPanel extends HTMLElement {
       this._error = e.message || String(e);
     }
     this._renderRows();
+    this._loadReview();
     this._loadMappings();
+  }
+
+  async _loadReview() {
+    try {
+      const r = await this._call("get_review", {}, true);
+      this._review = (r.response && r.response.items) || [];
+      this._reviewTotal = (r.response && r.response.total_units) || 0;
+    } catch (e) {
+      this._error = e.message || String(e);
+    }
+    this._renderReview();
+  }
+
+  async _reviewSetQty(ean, quantity) {
+    try {
+      await this._call("set_review_quantity", { ean, quantity });
+    } catch (e) {
+      this._error = e.message || String(e);
+      this._loadReview();
+    }
+  }
+
+  async _reviewRemove(ean) {
+    try {
+      await this._call("remove_review", { ean });
+    } catch (e) {
+      this._error = e.message || String(e);
+      this._loadReview();
+    }
+  }
+
+  async _reviewCommit() {
+    if (!confirm(`Přidat ${this._reviewTotal} kusů do košíku na Rohlíku?`)) return;
+    try {
+      const r = await this._call("commit_review", {}, true);
+      const failed = (r.response && r.response.failed) || [];
+      this._error = failed.length
+        ? `Nepřidáno (nedostupné): ${failed.map((f) => f.name || f.ean).join(", ")}`
+        : null;
+    } catch (e) {
+      this._error = e.message || String(e);
+    }
+    this._loadReview();
+  }
+
+  async _reviewClear() {
+    if (!confirm("Vyprázdnit nákupní seznam bez objednání?")) return;
+    try {
+      await this._call("clear_review", {});
+    } catch (e) {
+      this._error = e.message || String(e);
+    }
+    this._loadReview();
   }
 
   async _loadMappings() {
@@ -108,6 +168,7 @@ class RohlikEanPanel extends HTMLElement {
       for (const c of item.candidates || []) ids.push(c.id);
     for (const m of Object.values(this._mappings)) ids.push(m.product_id);
     for (const c of this._editCandidates) ids.push(c.id);
+    for (const r of this._review) ids.push(r.product_id);
     return ids.filter((i) => i != null);
   }
 
@@ -135,6 +196,7 @@ class RohlikEanPanel extends HTMLElement {
     }
     for (const i of missing) this._imgsPending.delete(i);
     this._renderRows();
+    this._renderReview();
     this._renderMappings();
   }
 
@@ -283,10 +345,20 @@ class RohlikEanPanel extends HTMLElement {
                  border:1px solid var(--divider-color,#e0e0e0); border-radius:6px; padding:3px 6px; }
         .editbox { margin-top:10px; padding-top:10px; border-top:1px solid var(--divider-color,#e0e0e0); }
         input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
+        .rev { background: var(--card-background-color, #fff); border-radius:10px; padding:8px 14px; margin-bottom:8px;
+               box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0,0,0,.12));
+               display:grid; grid-template-columns: 44px 1fr auto auto; gap:12px; align-items:center; }
+        .rev .nm { font-size:13px; }
+        .qty { display:flex; align-items:center; gap:6px; }
+        .qty button { padding:2px 9px; font-size:15px; line-height:1; }
+        .qty .n { min-width:22px; text-align:center; font-weight:600; }
+        .revtools { display:flex; gap:10px; margin:6px 0 14px; }
+        .revtools .commit { background: var(--success-color, #43a047); }
       </style>
       <h1>Rohlík EAN — učení kódů</h1>
       <div class="sub">Přiřazení pouze naučí mapování EAN → produkt. Do košíku se nic nepřidává — nákup proběhne až dalším skenem.</div>
       <div id="error"></div>
+      <div id="review"></div>
       <div id="rows"></div>
       <h2>Naučené kódy <span class="count" id="mcount"></span></h2>
       <div class="mtools">
@@ -363,6 +435,70 @@ class RohlikEanPanel extends HTMLElement {
     pick.addEventListener("click", () => this._assign(ean, c));
     div.append(nm, pr, pick);
     return div;
+  }
+
+  _renderReview() {
+    const root = this.shadowRoot.getElementById("review");
+    if (!root) return;
+    root.innerHTML = "";
+    if (!this._review.length) {
+      this._ensureImages();
+      return;
+    }
+    const head = document.createElement("h2");
+    head.innerHTML = `Nákupní seznam <span class="count">(${this._review.length} položek · ${this._reviewTotal} ks)</span>`;
+    root.appendChild(head);
+
+    const tools = document.createElement("div");
+    tools.className = "revtools";
+    const commit = document.createElement("button");
+    commit.className = "commit";
+    commit.textContent = "Přidat vše do košíku";
+    commit.addEventListener("click", () => this._reviewCommit());
+    const clear = document.createElement("button");
+    clear.className = "danger";
+    clear.textContent = "Vyprázdnit";
+    clear.addEventListener("click", () => this._reviewClear());
+    tools.append(commit, clear);
+    root.appendChild(tools);
+
+    for (const it of this._review) {
+      const row = document.createElement("div");
+      row.className = "rev" + (this._busy.has(it.ean) ? " busy" : "");
+      row.appendChild(this._thumb(it.product_id));
+
+      const nm = document.createElement("div");
+      nm.className = "nm";
+      nm.innerHTML = `${this._esc(it.name || "ID " + it.product_id)}<br><span class="ean">${this._esc(it.ean)}</span>`;
+
+      const qty = document.createElement("div");
+      qty.className = "qty";
+      const minus = document.createElement("button");
+      minus.className = "ghost";
+      minus.textContent = "−";
+      minus.addEventListener("click", () =>
+        this._reviewSetQty(it.ean, it.quantity - 1)
+      );
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = it.quantity;
+      const plus = document.createElement("button");
+      plus.className = "ghost";
+      plus.textContent = "+";
+      plus.addEventListener("click", () =>
+        this._reviewSetQty(it.ean, it.quantity + 1)
+      );
+      qty.append(minus, n, plus);
+
+      const del = document.createElement("button");
+      del.className = "danger";
+      del.textContent = "Odebrat";
+      del.addEventListener("click", () => this._reviewRemove(it.ean));
+
+      row.append(nm, qty, del);
+      root.appendChild(row);
+    }
+    this._ensureImages();
   }
 
   _renderRows() {

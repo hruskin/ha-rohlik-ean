@@ -32,13 +32,18 @@ from .const import (
     CONF_NOTIFY_UNRESOLVED,
     CONF_OFF_PASSWORD,
     CONF_OFF_USER,
+    CONF_REVIEW_MODE,
     DEFAULT_NOTIFY_UNRESOLVED,
+    DEFAULT_REVIEW_MODE,
     DOMAIN,
     EVENT_MATCHED,
+    EVENT_REVIEW_ADDED,
     EVENT_UNRESOLVED,
     PANEL_JS_URL,
     PANEL_URL_PATH,
     SERVICE_ADD_BY_EAN,
+    SERVICE_CLEAR_REVIEW,
+    SERVICE_COMMIT_REVIEW,
     SERVICE_CONFIRM_MATCH,
     SERVICE_CONTRIBUTE_TO_OFF,
     SERVICE_DISCARD_SCAN,
@@ -47,8 +52,12 @@ from .const import (
     SERVICE_GET_MAPPINGS,
     SERVICE_GET_PRODUCT_IMAGES,
     SERVICE_GET_QUEUE,
+    SERVICE_GET_REVIEW,
+    SERVICE_REMOVE_REVIEW,
     SERVICE_SEARCH_BY_NAME,
     SERVICE_SEARCH_PRODUCTS,
+    SERVICE_SET_REVIEW_QUANTITY,
+    SERVICE_UNDO_LAST_ADD,
 )
 from .images import fetch_product_info
 from .off_client import OFFContributeError, contribute_product, fetch_metadata
@@ -59,7 +68,9 @@ from .resolver import (
     EanResolver,
     Resolution,
 )
+from .review import ReviewList
 from .runtime import RohlikEanData
+from .stats import ScanStats
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,8 +87,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) ->
     await resolver.async_load()
     queue = PendingQueue(hass)
     await queue.async_load()
+    review = ReviewList(hass)
+    await review.async_load()
+    stats = ScanStats(hass)
+    await stats.async_load()
 
-    data = RohlikEanData(hass=hass, resolver=resolver, queue=queue)
+    data = RohlikEanData(
+        hass=hass, resolver=resolver, queue=queue, review=review, stats=stats
+    )
     entry.runtime_data = data
     hass.data[DOMAIN] = data
 
@@ -139,6 +156,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: RohlikEanConfigEntry) -
             SERVICE_SEARCH_PRODUCTS,
             SERVICE_GET_PRODUCT_IMAGES,
             SERVICE_CONTRIBUTE_TO_OFF,
+            SERVICE_UNDO_LAST_ADD,
+            SERVICE_GET_REVIEW,
+            SERVICE_COMMIT_REVIEW,
+            SERVICE_CLEAR_REVIEW,
+            SERVICE_REMOVE_REVIEW,
+            SERVICE_SET_REVIEW_QUANTITY,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok
@@ -201,7 +224,44 @@ async def _finalize_add(
     )
     resolution.product["name"] = name
     await resolver.async_remember(ean, resolution.product["id"], name)
+    data.track_add(ean, resolution.product["id"], name, quantity)
+    await data.stats.async_increment()
     return _report_matched(hass, resolution, quantity, added=True)
+
+
+async def _stage_review(
+    hass: HomeAssistant, data: RohlikEanData, resolution: Resolution, quantity: int
+) -> dict[str, Any]:
+    """Review mode: stage a resolved product instead of adding to the cart."""
+    ean = resolution.ean
+    name = resolution.product.get("name")
+    if not name:
+        info = await fetch_product_info(
+            async_get_clientsession(hass), resolution.product["id"]
+        )
+        name = (info or {}).get("name")
+        resolution.product["name"] = name
+    await data.resolver.async_remember(ean, resolution.product["id"], name)
+    await data.review.async_add(ean, resolution.product["id"], name, quantity)
+    await data.stats.async_increment()
+    hass.bus.async_fire(
+        EVENT_REVIEW_ADDED,
+        {
+            ATTR_EAN: ean,
+            ATTR_PRODUCT_ID: resolution.product["id"],
+            ATTR_NAME: name,
+            ATTR_QUANTITY: quantity,
+            "review_total": data.review.total_units,
+        },
+    )
+    return {
+        "status": "review",
+        ATTR_EAN: ean,
+        "source": resolution.source,
+        "product": resolution.product,
+        "added": False,
+        "review_total": data.review.total_units,
+    }
 
 
 def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
@@ -219,6 +279,8 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
             return _report_matched(
                 hass, resolution, quantity, added=False, fire_event=False
             )
+        if data.resolver.entry.options.get(CONF_REVIEW_MODE, DEFAULT_REVIEW_MODE):
+            return await _stage_review(hass, data, resolution, quantity)
         return await _finalize_add(hass, data, resolution, quantity)
 
     async def confirm_match(call: ServiceCall) -> dict[str, Any]:
@@ -313,6 +375,55 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
             "already_known": already_known,
             "failed": failed,
         }
+
+    async def undo_last_add(call: ServiceCall) -> dict[str, Any]:
+        return await data.async_undo_last()
+
+    async def get_review(call: ServiceCall) -> dict[str, Any]:
+        return {
+            "items": data.review.items,
+            "count": data.review.count,
+            "total_units": data.review.total_units,
+        }
+
+    async def remove_review(call: ServiceCall) -> dict[str, Any]:
+        item = await data.review.async_remove(call.data[ATTR_EAN])
+        return {"status": "removed" if item else "not_found", ATTR_EAN: call.data[ATTR_EAN]}
+
+    async def set_review_quantity(call: ServiceCall) -> dict[str, Any]:
+        ok = await data.review.async_set_quantity(
+            call.data[ATTR_EAN], call.data[ATTR_QUANTITY]
+        )
+        return {"status": "updated" if ok else "not_found", ATTR_EAN: call.data[ATTR_EAN]}
+
+    async def clear_review(call: ServiceCall) -> dict[str, Any]:
+        count = data.review.count
+        await data.review.async_clear()
+        return {"status": "cleared", "removed": count}
+
+    async def commit_review(call: ServiceCall) -> dict[str, Any]:
+        added: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        for item in data.review.items:
+            ok = await resolver.async_add_to_cart(item["product_id"], item["quantity"])
+            record = {
+                ATTR_EAN: item["ean"],
+                ATTR_NAME: item.get("name"),
+                ATTR_QUANTITY: item["quantity"],
+            }
+            if ok:
+                added.append(record)
+                await data.review.async_remove(item["ean"])
+            else:
+                failed.append(record)
+                await data.async_report_add_failed(
+                    item["ean"], item["product_id"], item.get("name"), item["quantity"]
+                )
+        hass.bus.async_fire(
+            f"{DOMAIN}_review_committed",
+            {"added": added, "failed": failed},
+        )
+        return {"added": added, "failed": failed}
 
     async def forget_eans(call: ServiceCall) -> dict[str, Any]:
         removed = await resolver.async_forget_many(call.data[ATTR_EANS])
@@ -434,6 +545,55 @@ def _register_services(hass: HomeAssistant, data: RohlikEanData) -> None:
         SERVICE_CONTRIBUTE_TO_OFF,
         contribute_to_off,
         schema=vol.Schema({vol.Optional(ATTR_EAN): _EAN_SCHEMA}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UNDO_LAST_ADD,
+        undo_last_add,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_REVIEW,
+        get_review,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_COMMIT_REVIEW,
+        commit_review,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_REVIEW,
+        clear_review,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REMOVE_REVIEW,
+        remove_review,
+        schema=vol.Schema({vol.Required(ATTR_EAN): _EAN_SCHEMA}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_REVIEW_QUANTITY,
+        set_review_quantity,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_EAN): _EAN_SCHEMA,
+                vol.Required(ATTR_QUANTITY): vol.All(
+                    vol.Coerce(int), vol.Range(min=0)
+                ),
+            }
+        ),
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(

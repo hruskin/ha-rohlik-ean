@@ -137,6 +137,54 @@ search_products:
       selector:
         text:
 
+undo_last_add:
+  name: Undo last add
+  description: >-
+    Remove the last product added directly to the cart (best effort — removes
+    the whole cart line for that product). Not needed in review mode.
+
+get_review:
+  name: Get review list
+  description: Return the products staged in the review list (review mode).
+
+commit_review:
+  name: Commit review list
+  description: Add all staged products to the cart and clear the review list.
+
+clear_review:
+  name: Clear review list
+  description: Discard the whole review list without ordering anything.
+
+remove_review:
+  name: Remove from review list
+  description: Remove one product from the review list.
+  fields:
+    ean:
+      name: EAN
+      required: true
+      example: "8594001170012"
+      selector:
+        text:
+
+set_review_quantity:
+  name: Set review quantity
+  description: Set the quantity for a product in the review list (0 removes it).
+  fields:
+    ean:
+      name: EAN
+      required: true
+      example: "8594001170012"
+      selector:
+        text:
+    quantity:
+      name: Quantity
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 99
+          mode: box
+
 contribute_to_off:
   name: Contribute to OpenFoodFacts
   description: >-

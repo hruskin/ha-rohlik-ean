@@ -19,6 +19,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -28,6 +29,7 @@ from .const import (
     DEFAULT_TRUST_EAN_HIT,
     EVENT_CACHE_CHANGED,
     ROHLIKCZ_DOMAIN,
+    SIGNAL_UPDATED,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -88,6 +90,14 @@ class EanResolver:
         """All learned EAN → product mappings."""
         return dict(self._cache)
 
+    @property
+    def learned_count(self) -> int:
+        return len(self._cache)
+
+    @property
+    def contributed_count(self) -> int:
+        return sum(1 for m in self._cache.values() if m.get("off_contributed"))
+
     async def async_remember(
         self, ean: str, product_id: int, name: str | None = None
     ) -> None:
@@ -106,12 +116,14 @@ class EanResolver:
             self._cache[ean]["off_contributed"] = date.today().isoformat()
             await self._store.async_save(self._cache)
             self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
+            async_dispatcher_send(self._hass, SIGNAL_UPDATED)
 
     async def async_forget(self, ean: str) -> bool:
         if ean in self._cache:
             del self._cache[ean]
             await self._store.async_save(self._cache)
             self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
+            async_dispatcher_send(self._hass, SIGNAL_UPDATED)
             return True
         return False
 
@@ -125,6 +137,7 @@ class EanResolver:
         if removed:
             await self._store.async_save(self._cache)
             self._hass.bus.async_fire(EVENT_CACHE_CHANGED)
+            async_dispatcher_send(self._hass, SIGNAL_UPDATED)
         return removed
 
     async def async_resolve(self, ean: str, bypass_cache: bool = False) -> Resolution:
@@ -264,8 +277,8 @@ class EanResolver:
         added = (response or {}).get("added_products", [])
         return any(str(item) == str(product_id) for item in added)
 
-    async def async_cart_product_name(self, product_id: int) -> str | None:
-        """Look up a product's name from the current cart content."""
+    async def async_cart_items(self) -> list[dict[str, Any]]:
+        """Return the current cart's line items (id, cart_item_id, name, …)."""
         response = await self._hass.services.async_call(
             ROHLIKCZ_DOMAIN,
             "get_cart_content",
@@ -273,9 +286,20 @@ class EanResolver:
             blocking=True,
             return_response=True,
         )
-        for item in (response or {}).get("products", []):
+        return (response or {}).get("products", [])
+
+    async def async_cart_product_name(self, product_id: int) -> str | None:
+        """Look up a product's name from the current cart content."""
+        for item in await self.async_cart_items():
             if str(item.get("id")) == str(product_id):
                 return item.get("name")
+        return None
+
+    def rohlikcz_account(self) -> Any:
+        """Return the loaded rohlikcz account object (its hub), or None."""
+        for entry in self._hass.config_entries.async_entries(ROHLIKCZ_DOMAIN):
+            if entry.state is ConfigEntryState.LOADED:
+                return getattr(entry, "runtime_data", None)
         return None
 
     def rohlikcz_entry_id(self) -> str:

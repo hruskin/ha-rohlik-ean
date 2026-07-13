@@ -10,7 +10,7 @@ from homeassistant.helpers.storage import Store
 from .const import (
     EVENT_QUEUE_CHANGED,
     QUEUE_STORAGE_KEY,
-    SIGNAL_QUEUE_UPDATED,
+    SIGNAL_UPDATED,
     STORAGE_VERSION,
 )
 
@@ -94,6 +94,6 @@ class PendingQueue:
 
     async def _save_and_notify(self) -> None:
         await self._store.async_save(self._items)
-        async_dispatcher_send(self._hass, SIGNAL_QUEUE_UPDATED)
+        async_dispatcher_send(self._hass, SIGNAL_UPDATED)
         # Bus event so frontend code (the teaching panel) can refresh too.
         self._hass.bus.async_fire(EVENT_QUEUE_CHANGED)

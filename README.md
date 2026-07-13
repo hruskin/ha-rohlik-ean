@@ -130,6 +130,28 @@ restart HA) a integrace k ní vytváří zařízení **Rohlík EAN** s entitami:
 
 Hotová podmíněná karta: [examples/confirm_card.yaml](examples/confirm_card.yaml).
 
+## Nákupní seznam (volitelně) a undo
+
+Ve výchozím stavu jde naskenovaný známý produkt rovnou do košíku. Když
+v možnostech zapneš **Nákupní seznam**, skeny se místo toho řadí do
+review seznamu — v panelu ho zkontroluješ, upravíš množství (± u každé
+položky), nechtěné odebereš a teprve tlačítkem **Přidat vše do košíku**
+(služba `commit_review`) je pošleš na Rohlík najednou. Chrání to před
+omylem i vyprodaným zbožím (nedostupné položky commit ohlásí a nechá
+v seznamu). Sken v tomto režimu vystřelí `rohlik_ean_review_added`.
+
+**Undo** (přímý režim): `rohlik_ean.undo_last_add` odebere naposledy
+přidaný produkt z košíku. HA-RohlikCZ nevystavuje odebrání jako službu,
+takže jde o best-effort přes jeho interní `delete_from_cart` a odebere
+**celý řádek** daného produktu z košíku. V režimu nákupního seznamu undo
+nepotřebuješ — položku prostě odebereš ze seznamu před odesláním.
+
+## Statistiky
+
+Integrace vystavuje senzory: **Naučené kódy**, **Přispěno do OFF**,
+**Skenů dnes** (reset o půlnoci), **Čeká na potvrzení** a **Nákupní
+seznam** (s položkami v atributech). Hodí se na dashboard.
+
 ## Přispívání do OpenFoodFacts
 
 Kódy, které učíš ručně, jsou přesně ty, co v OpenFoodFacts chybí — a ty
@@ -150,6 +172,8 @@ všechny dosud neodeslané, max 20 na volání).
 - **Věřit jedinému EAN hitu** (výchozí ano) — jediný výsledek fulltextu pro
   samotný EAN se bere jako přesná shoda.
 - **Notifikace pro nerozpoznané** (výchozí ano).
+- **Nákupní seznam** (výchozí vypnuto) — skeny se řadí do review seznamu
+  místo přímého přidání do košíku (viz výše).
 - **OpenFoodFacts účet** — uživatel + heslo pro přispívání naučených
   kódů (viz výše).
 

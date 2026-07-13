@@ -7,7 +7,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN, SIGNAL_QUEUE_UPDATED
+from .const import DOMAIN, SIGNAL_UPDATED
 from .runtime import RohlikEanData
 
 
@@ -29,7 +29,7 @@ class RohlikEanEntity(Entity):
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
             async_dispatcher_connect(
-                self.hass, SIGNAL_QUEUE_UPDATED, self._handle_queue_update
+                self.hass, SIGNAL_UPDATED, self._handle_queue_update
             )
         )
 

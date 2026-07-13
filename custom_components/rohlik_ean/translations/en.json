@@ -18,6 +18,7 @@
           "confidence_threshold": "Auto-add confidence threshold (0.5–1.0)",
           "trust_ean_hit": "Trust a single Rohlík fulltext hit for a raw EAN",
           "notify_unresolved": "Create a persistent notification for unresolved EANs",
+          "review_mode": "Review mode: stage scans in a list instead of adding to the cart directly",
           "off_user": "OpenFoodFacts username (for contributing learned codes)",
           "off_password": "OpenFoodFacts password"
         }
@@ -26,7 +27,11 @@
   },
   "entity": {
     "sensor": {
-      "pending": { "name": "Pending confirmations" }
+      "pending": { "name": "Pending confirmations" },
+      "review": { "name": "Review list" },
+      "learned": { "name": "Learned codes" },
+      "contributed": { "name": "Contributed to OFF" },
+      "scans_today": { "name": "Scans today" }
     },
     "select": {
       "candidate": { "name": "Candidate" }

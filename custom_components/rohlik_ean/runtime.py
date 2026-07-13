@@ -11,6 +11,8 @@ from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
+from homeassistant.exceptions import HomeAssistantError
+
 from .const import (
     ATTR_EAN,
     ATTR_NAME,
@@ -25,6 +27,8 @@ from .const import (
 from .images import ImageCache
 from .pending import PendingQueue
 from .resolver import EanResolver
+from .review import ReviewList
+from .stats import ScanStats
 
 
 @dataclass(slots=True)
@@ -34,7 +38,11 @@ class RohlikEanData:
     hass: HomeAssistant
     resolver: EanResolver
     queue: PendingQueue
+    review: ReviewList
+    stats: ScanStats
     images: ImageCache = field(default_factory=ImageCache)
+    # Last successful direct cart add, for undo: {ean, product_id, name, quantity}.
+    last_add: dict | None = None
 
     async def async_confirm(
         self,
@@ -114,6 +122,52 @@ class RohlikEanData:
         candidates = await self.resolver.async_search(name, limit=8)
         await self.queue.async_set_candidates(ean, candidates, quantity=quantity)
         return candidates
+
+    def track_add(self, ean: str, product_id: int, name: str | None, quantity: int) -> None:
+        """Remember the last direct cart add so it can be undone."""
+        self.last_add = {
+            "ean": ean,
+            "product_id": product_id,
+            "name": name,
+            "quantity": quantity,
+        }
+
+    async def async_undo_last(self) -> dict:
+        """Remove the last-added product's cart line via the rohlikcz hub.
+
+        Best effort: rohlikcz exposes no remove-from-cart service, so we
+        reach its account object and delete the whole line for that product
+        (Rohlík has no per-unit removal here).
+        """
+        last = self.last_add
+        if not last:
+            raise ServiceValidationError("Není co vrátit — žádné poslední přidání")
+
+        account = self.resolver.rohlikcz_account()
+        delete = getattr(account, "delete_from_cart", None)
+        if account is None or delete is None:
+            raise HomeAssistantError(
+                "Vrácení není dostupné — aktuální verze HA-RohlikCZ"
+                " neumožňuje odebrání z košíku"
+            )
+
+        cart_item_id = None
+        for item in await self.resolver.async_cart_items():
+            if str(item.get("id")) == str(last["product_id"]):
+                cart_item_id = item.get("cart_item_id")
+                break
+        if cart_item_id is None:
+            self.last_add = None
+            return {"status": "not_in_cart", ATTR_PRODUCT_ID: last["product_id"]}
+
+        await delete(str(cart_item_id))
+        self.last_add = None
+        return {
+            "status": "removed",
+            ATTR_EAN: last["ean"],
+            ATTR_PRODUCT_ID: last["product_id"],
+            ATTR_NAME: last["name"],
+        }
 
     async def async_discard(self, ean: str | None = None) -> dict | None:
         """Drop a pending scan (oldest when no EAN given) without learning."""

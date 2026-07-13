@@ -23,9 +23,11 @@ from .const import (
     CONF_NOTIFY_UNRESOLVED,
     CONF_OFF_PASSWORD,
     CONF_OFF_USER,
+    CONF_REVIEW_MODE,
     CONF_TRUST_EAN_HIT,
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_NOTIFY_UNRESOLVED,
+    DEFAULT_REVIEW_MODE,
     DEFAULT_TRUST_EAN_HIT,
     DOMAIN,
     ROHLIKCZ_DOMAIN,
@@ -88,6 +90,10 @@ class RohlikEanOptionsFlow(OptionsFlow):
                     default=options.get(
                         CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED
                     ),
+                ): bool,
+                vol.Optional(
+                    CONF_REVIEW_MODE,
+                    default=options.get(CONF_REVIEW_MODE, DEFAULT_REVIEW_MODE),
                 ): bool,
                 vol.Optional(
                     CONF_OFF_USER,
