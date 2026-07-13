@@ -15,19 +15,12 @@ SIGNAL_QUEUE_UPDATED: Final = f"{DOMAIN}_queue_updated"
 CONF_CONFIDENCE_THRESHOLD: Final = "confidence_threshold"
 CONF_TRUST_EAN_HIT: Final = "trust_ean_hit"
 CONF_NOTIFY_UNRESOLVED: Final = "notify_unresolved"
-CONF_GITHUB_REPO: Final = "github_repo"
-CONF_GITHUB_TOKEN: Final = "github_token"
-CONF_GITHUB_PATH: Final = "github_path"
-CONF_GITHUB_AUTO_BACKUP: Final = "github_auto_backup"
 CONF_OFF_USER: Final = "off_user"
 CONF_OFF_PASSWORD: Final = "off_password"
 
 DEFAULT_CONFIDENCE_THRESHOLD: Final = 0.75
 DEFAULT_TRUST_EAN_HIT: Final = True
 DEFAULT_NOTIFY_UNRESOLVED: Final = True
-DEFAULT_GITHUB_PATH: Final = "rohlik-ean-mappings.json"
-DEFAULT_GITHUB_AUTO_BACKUP: Final = True
-BACKUP_DEBOUNCE_SECONDS: Final = 60
 
 ATTR_EAN: Final = "ean"
 ATTR_EANS: Final = "eans"
@@ -47,11 +40,7 @@ SERVICE_GET_MAPPINGS: Final = "get_mappings"
 SERVICE_FORGET_EANS: Final = "forget_eans"
 SERVICE_SEARCH_PRODUCTS: Final = "search_products"
 SERVICE_GET_PRODUCT_IMAGES: Final = "get_product_images"
-SERVICE_BACKUP_MAPPINGS: Final = "backup_mappings"
-SERVICE_RESTORE_MAPPINGS: Final = "restore_mappings"
 SERVICE_CONTRIBUTE_TO_OFF: Final = "contribute_to_off"
-
-ATTR_REPLACE: Final = "replace"
 
 PANEL_URL_PATH: Final = "rohlik-ean"
 PANEL_JS_URL: Final = "/rohlik_ean_panel/panel.js"
@@ -67,4 +56,4 @@ OFF_URL: Final = (
     "?fields=product_name,product_name_cs,brands,quantity,image_front_small_url"
 )
 OFF_WRITE_URL: Final = "https://world.openfoodfacts.org/cgi/product_jqm2.pl"
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.10.0 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.10.1 (https://github.com/hruskin/ha-rohlik-ean)"

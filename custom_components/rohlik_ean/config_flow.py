@@ -20,17 +20,11 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_CONFIDENCE_THRESHOLD,
-    CONF_GITHUB_AUTO_BACKUP,
-    CONF_GITHUB_PATH,
-    CONF_GITHUB_REPO,
-    CONF_GITHUB_TOKEN,
     CONF_NOTIFY_UNRESOLVED,
     CONF_OFF_PASSWORD,
     CONF_OFF_USER,
     CONF_TRUST_EAN_HIT,
     DEFAULT_CONFIDENCE_THRESHOLD,
-    DEFAULT_GITHUB_AUTO_BACKUP,
-    DEFAULT_GITHUB_PATH,
     DEFAULT_NOTIFY_UNRESOLVED,
     DEFAULT_TRUST_EAN_HIT,
     DOMAIN,
@@ -89,28 +83,6 @@ class RohlikEanOptionsFlow(OptionsFlow):
                     CONF_NOTIFY_UNRESOLVED,
                     default=options.get(
                         CONF_NOTIFY_UNRESOLVED, DEFAULT_NOTIFY_UNRESOLVED
-                    ),
-                ): bool,
-                vol.Optional(
-                    CONF_GITHUB_REPO,
-                    description={
-                        "suggested_value": options.get(CONF_GITHUB_REPO, "")
-                    },
-                ): str,
-                vol.Optional(
-                    CONF_GITHUB_TOKEN,
-                    description={
-                        "suggested_value": options.get(CONF_GITHUB_TOKEN, "")
-                    },
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-                vol.Optional(
-                    CONF_GITHUB_PATH,
-                    default=options.get(CONF_GITHUB_PATH, DEFAULT_GITHUB_PATH),
-                ): str,
-                vol.Optional(
-                    CONF_GITHUB_AUTO_BACKUP,
-                    default=options.get(
-                        CONF_GITHUB_AUTO_BACKUP, DEFAULT_GITHUB_AUTO_BACKUP
                     ),
                 ): bool,
                 vol.Optional(

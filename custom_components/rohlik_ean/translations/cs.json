@@ -18,10 +18,6 @@
           "confidence_threshold": "Práh jistoty pro automatické přidání (0.5–1.0)",
           "trust_ean_hit": "Věřit jedinému výsledku fulltextu Rohlíku pro samotný EAN",
           "notify_unresolved": "Vytvářet trvalou notifikaci pro nerozpoznané EANy",
-          "github_repo": "GitHub repo pro zálohu (owner/repo, prázdné = vypnuto)",
-          "github_token": "GitHub token (scope repo)",
-          "github_path": "Cesta k souboru zálohy v repu",
-          "github_auto_backup": "Zálohovat automaticky při každé změně databáze",
           "off_user": "Uživatelské jméno OpenFoodFacts (pro přispívání naučených kódů)",
           "off_password": "Heslo OpenFoodFacts"
         }

@@ -18,10 +18,6 @@
           "confidence_threshold": "Auto-add confidence threshold (0.5–1.0)",
           "trust_ean_hit": "Trust a single Rohlík fulltext hit for a raw EAN",
           "notify_unresolved": "Create a persistent notification for unresolved EANs",
-          "github_repo": "GitHub backup repo (owner/repo, empty = disabled)",
-          "github_token": "GitHub token (repo scope)",
-          "github_path": "Backup file path in the repo",
-          "github_auto_backup": "Back up automatically on every database change",
           "off_user": "OpenFoodFacts username (for contributing learned codes)",
           "off_password": "OpenFoodFacts password"
         }
