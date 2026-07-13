@@ -63,10 +63,14 @@ class RohlikEanOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        options = self.config_entry.options
         if user_input is not None:
+            # The password field is never pre-filled; a blank submission
+            # keeps the stored password instead of wiping it.
+            if not user_input.get(CONF_OFF_PASSWORD):
+                user_input[CONF_OFF_PASSWORD] = options.get(CONF_OFF_PASSWORD, "")
             return self.async_create_entry(title="", data=user_input)
 
-        options = self.config_entry.options
         schema = vol.Schema(
             {
                 vol.Optional(
@@ -91,12 +95,11 @@ class RohlikEanOptionsFlow(OptionsFlow):
                         "suggested_value": options.get(CONF_OFF_USER, "")
                     },
                 ): str,
-                vol.Optional(
-                    CONF_OFF_PASSWORD,
-                    description={
-                        "suggested_value": options.get(CONF_OFF_PASSWORD, "")
-                    },
-                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                # Not pre-filled (never send the stored password to the
+                # browser); leave blank to keep the current one.
+                vol.Optional(CONF_OFF_PASSWORD): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

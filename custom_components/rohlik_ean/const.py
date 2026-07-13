@@ -56,4 +56,4 @@ OFF_URL: Final = (
     "?fields=product_name,product_name_cs,brands,quantity,image_front_small_url"
 )
 OFF_WRITE_URL: Final = "https://world.openfoodfacts.org/cgi/product_jqm2.pl"
-OFF_USER_AGENT: Final = "ha-rohlik-ean/0.10.1 (https://github.com/hruskin/ha-rohlik-ean)"
+OFF_USER_AGENT: Final = "ha-rohlik-ean/0.10.2 (https://github.com/hruskin/ha-rohlik-ean)"

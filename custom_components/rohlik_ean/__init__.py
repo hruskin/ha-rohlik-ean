@@ -114,7 +114,7 @@ async def _register_panel(hass: HomeAssistant) -> None:
                     "embed_iframe": False,
                 }
             },
-            require_admin=False,
+            require_admin=True,
         )
     except ValueError:
         # Panel already registered (reload) — that's fine.

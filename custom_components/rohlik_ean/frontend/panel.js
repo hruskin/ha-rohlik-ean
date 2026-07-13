@@ -311,8 +311,29 @@ class RohlikEanPanel extends HTMLElement {
       .addEventListener("click", () => this._forgetSelected());
   }
 
+  // Only load images over https from trusted hosts. OpenFoodFacts image
+  // URLs are community-editable, so an unrestricted <img src> would let a
+  // third party trigger an outbound request (IP + scan leak).
+  _safeImg(url) {
+    try {
+      const u = new URL(url);
+      if (u.protocol !== "https:") return null;
+      const host = u.hostname.toLowerCase();
+      const ok = [
+        "cdn.rohlik.cz",
+        "rohlik.cz",
+        "openfoodfacts.org",
+        "static.openfoodfacts.org",
+        "images.openfoodfacts.org",
+      ];
+      return ok.some((h) => host === h || host.endsWith("." + h)) ? url : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   _thumb(productId) {
-    const url = this._imgs[productId];
+    const url = this._safeImg(this._imgs[productId]);
     if (url) {
       const img = document.createElement("img");
       img.className = "thumb";
@@ -368,10 +389,11 @@ class RohlikEanPanel extends HTMLElement {
         ? `${item.metadata.brand || ""} ${item.metadata.name || ""} (${item.metadata.quantity || "?"})`.trim()
         : "kód nezná OpenFoodFacts";
       left.innerHTML = `<div class="ean">${this._esc(item.ean)}</div><div class="meta">${this._esc(metaTxt)}</div>`;
-      if (item.metadata && item.metadata.image) {
+      const metaImg = item.metadata && this._safeImg(item.metadata.image);
+      if (metaImg) {
         const mi = document.createElement("img");
         mi.className = "thumb metaimg";
-        mi.src = item.metadata.image;
+        mi.src = metaImg;
         mi.loading = "lazy";
         mi.alt = "";
         left.appendChild(mi);
