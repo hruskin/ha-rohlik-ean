@@ -196,6 +196,11 @@ kaskáda po čisté instalaci znovu najde sama.
 - [examples/esphome_gm67.yaml](examples/esphome_gm67.yaml) — ESPHome
   konfigurace čtečky s agregací opakovaných skenů přímo na zařízení
   (event nese `barcode` + `quantity`)
+- [examples/esphome_gm67_display.yaml](examples/esphome_gm67_display.yaml)
+  — plná HW verze: GM67 + SSD1306 OLED + dotykové TTP223 (probudí čtečku
+  na 20 s, pak vypne); displej ukazuje stav a poslední produkt z HA
+- [examples/display_feedback.yaml](examples/display_feedback.yaml) —
+  automatizace, které po skenu pošlou název + stav na OLED displej
 
 ## Omezení
 

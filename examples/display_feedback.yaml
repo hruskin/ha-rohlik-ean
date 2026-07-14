@@ -1,0 +1,54 @@
+# Zpětná vazba na OLED displej čtečky (a LED) — reaguje na eventy integrace.
+# Volá ESPHome akce scan_success/unknown/failed s title + subtitle, které
+# se ukážou na SSD1306 (viz examples/esphome_gm67_display.yaml).
+#
+# Název služby = esphome.<device_name>_scan_*  (pomlčky → podtržítka).
+# Uprav 'rohlik_ctecka' podle svého device_name.
+
+automation:
+  - alias: "Rohlík čtečka: přidáno → displej"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_matched
+    condition: "{{ trigger.event.data.added }}"
+    action:
+      - service: esphome.rohlik_ctecka_scan_success
+        data:
+          title: "{{ trigger.event.data.name or 'Přidáno' }}"
+          subtitle: >-
+            Přidáno{% if trigger.event.data.quantity > 1 %} · {{ trigger.event.data.quantity }} ks{% endif %}
+
+  - alias: "Rohlík čtečka: do seznamu → displej"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_review_added
+    action:
+      - service: esphome.rohlik_ctecka_scan_success
+        data:
+          title: "{{ trigger.event.data.name or 'Do seznamu' }}"
+          subtitle: "Seznam · {{ trigger.event.data.review_total }} ks"
+
+  - alias: "Rohlík čtečka: neznámý kód → displej"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_unresolved
+    action:
+      - service: esphome.rohlik_ctecka_scan_unknown
+        data:
+          title: "Neznámý kód"
+          subtitle: >-
+            {% if trigger.event.data.candidates | count > 0 %}Potvrď v HA{% else %}Nutno naučit{% endif %}
+
+  - alias: "Rohlík čtečka: vyprodáno → displej"
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: rohlik_ean_add_failed
+    action:
+      - service: esphome.rohlik_ctecka_scan_failed
+        data:
+          title: "{{ trigger.event.data.name or 'Produkt' }}"
+          subtitle: "Není skladem"
