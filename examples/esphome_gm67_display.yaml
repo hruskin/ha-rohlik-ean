@@ -6,14 +6,19 @@
 #  - SSD1306 128x64 I2C ukazuje stav + poslední produkt z HA.
 #
 # Příkazy dle manuálu GM67 (Hangzhou Grow, V1.1) — Appendix 6, Table 6-1/6-2:
-#   Host mode      07 C6 04 08 00 8A 08 FE 95   (bez něj START/STOP_DECODE neplatí!)
+#   Continuous mode 07 C6 04 08 00 8A 04 FE 99  (čte kód za kódem, nezhasne)
+#   Break time 0s   07 C6 04 08 00 89 00 FE 9E
 #   Single scan 20s 08 C6 04 08 00 F2 FA 0C FD 2E
-#   START_DECODE   04 E4 04 00 FF 14
-#   STOP_DECODE    04 E5 04 00 FF 13
-# Pozn.: v host mode se čtení po úspěšném dekódování samo ukončí → po každém
-# kódu posíláme START_DECODE znovu.
-# Kdyby opakovaný sken TÉHOŽ kódu nereagoval, vypni „Time Interval For The
-# Same Code Read" (manuál 4.6.1 „No delay") — default je 500 ms.
+#   SCAN_ENABLE     04 E9 04 00 FF 0F
+#   SCAN_DISABLE    04 EA 04 00 FF 0E
+# Proč ne host mode: v něm se čtení po každém dekódu ukončí (nutný re-arm
+# a čtečka mezi kusy zhasíná). START/STOP_DECODE vyžadují host mode,
+# SCAN_ENABLE/DISABLE ne — proto tahle kombinace.
+#
+# POČET KUSŮ opakovaným skenem řídí „Time Interval For The Same Code Read"
+# (manuál 4.6.1, default 500 ms): tentýž kód se přečte nejvýš jednou za tuto
+# dobu. Když ti drženýkód počítá moc rychle, nastav delší (1s/3s) setup
+# kódem z manuálu.
 #
 # !!! PŘED FLASHEM ZKONTROLUJ !!!
 #  - model/adresa displeje (128x64 / 0x3C)
@@ -38,21 +43,25 @@ esphome:
     priority: -100
     then:
       - delay: 2s            # počkej, až se GM67 nastartuje
-      # HOST MODE — bez něj GM67 ignoruje START_DECODE/STOP_DECODE
-      # (manuál 4.4 + Appendix 6: "the serial port command needs to be
-      #  valid in host mode. Please switch to the host mode first.")
+      # CONTINUOUS MODE — po přečtení kódu se čtení samo znovu spustí,
+      # takže čtečka mezi kusy nezhasne (manuál 4.2). Host mode by po
+      # každém dekódu zhasl a musel se re-armovat.
       - uart.write:
           id: scanner_uart
-          data: [0x07, 0xC6, 0x04, 0x08, 0x00, 0x8A, 0x08, 0xFE, 0x95]
+          data: [0x07, 0xC6, 0x04, 0x08, 0x00, 0x8A, 0x04, 0xFE, 0x99]
+      # Break time 0 s — bez prodlevy mezi jednotlivými čteními
+      - uart.write:
+          id: scanner_uart
+          data: [0x07, 0xC6, 0x04, 0x08, 0x00, 0x89, 0x00, 0xFE, 0x9E]
       # Single scan time 20 s = HW pojistka: i kdyby ESP umřelo,
-      # čtečka po 20 s sama zhasne. Drž stejně jako ${active_window}.
+      # čtečka sama zhasne. Drž stejně jako ${active_window}.
       - uart.write:
           id: scanner_uart
           data: [0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0xFA, 0x0C, 0xFD, 0x2E]
-      # pro jistotu ukonči případné čtení → tma
+      # SCAN_DISABLE → po startu tma
       - uart.write:
           id: scanner_uart
-          data: [0x04, 0xE5, 0x04, 0x00, 0xFF, 0x13]
+          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -247,9 +256,9 @@ script:
           id: scanner_uart
           data: [0x00]
       - delay: 60ms
-      - uart.write:                     # START_DECODE — spusť čtení
+      - uart.write:                     # SCAN_ENABLE — čtečka žije a čte dokola
           id: scanner_uart
-          data: [0x04, 0xE4, 0x04, 0x00, 0xFF, 0x14]
+          data: [0x04, 0xE9, 0x04, 0x00, 0xFF, 0x0F]
 
   # Odpočet do zhasnutí. mode: restart → každý úspěšný sken ho posune,
   # takže při skenování víc kusů nemusíš znovu sahat na tlačítko.
@@ -257,9 +266,9 @@ script:
     mode: restart
     then:
       - delay: ${active_window}
-      - uart.write:                     # STOP_DECODE — ukonči čtení (tma)
+      - uart.write:                     # SCAN_DISABLE — zhasni
           id: scanner_uart
-          data: [0x04, 0xE5, 0x04, 0x00, 0xFF, 0x13]
+          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
       - lambda: |-
           id(scanning) = false;
           id(disp_title) = "Rohlík EAN";
@@ -318,12 +327,8 @@ text_sensor:
     icon: "mdi:barcode-scan"
     on_value:
       then:
-        # V host mode se engine po úspěšném čtení sám zastaví → znovu
-        # nastartuj, ať jde pípat dál (i tentýž kód kvůli počtu kusů).
-        - uart.write:
-            id: scanner_uart
-            data: [0x04, 0xE4, 0x04, 0x00, 0xFF, 0x14]
-        # Každý úspěšný sken posune okno — můžeš pípat dál bez dotyku.
+        # Continuous mode se re-triggeruje sám → žádný re-arm netřeba.
+        # Každý úspěšný sken jen posune okno; pípáš dál bez dotyku.
         - script.execute: scanner_timeout
         - lambda: |-
             id(disp_title) = "Načteno";
