@@ -173,6 +173,7 @@ button:
     icon: "mdi:barcode-off"
     on_press:
       - script.stop: activate_scanner
+      - script.stop: scanner_timeout
       - uart.write:
           id: scanner_uart
           data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
@@ -199,12 +200,10 @@ display:
     id: oled
     update_interval: 500ms
     lambda: |-
-      if (id(scanning)) {
-        it.print(0, 0, id(font_big), "Skenuji…");
-      } else {
-        it.printf(0, 0, id(font_big), "%s", id(disp_title).c_str());
-      }
+      // Text řídí globály; tečka vpravo nahoře značí, že čtečka je živá.
+      it.printf(0, 0, id(font_big), "%s", id(disp_title).c_str());
       it.printf(0, 34, id(font_small), "%s", id(disp_sub).c_str());
+      if (id(scanning)) it.filled_circle(123, 4, 3);
 
 light:
   - platform: status_led
@@ -215,9 +214,19 @@ light:
       inverted: true
 
 script:
-  # Probuzení čtečky na ${active_window}. Další dotyk okno resetuje.
+  # Vstupní bod (dotyk / tlačítko v HA): zapne čtečku a nastartuje odpočet.
   - id: activate_scanner
     mode: restart
+    then:
+      - lambda: |-
+          id(disp_title) = "Skenuji…";
+          id(disp_sub) = "Přilož kód";
+      - script.execute: scanner_on
+      - script.execute: scanner_timeout
+      - component.update: oled
+
+  - id: scanner_on
+    mode: single
     then:
       - lambda: 'id(scanning) = true;'
       - uart.write:                     # probuď z případného spánku
@@ -227,7 +236,12 @@ script:
       - uart.write:                     # zapni skenování
           id: scanner_uart
           data: [0x04, 0xE9, 0x04, 0x00, 0xFF, 0x0F]
-      - component.update: oled
+
+  # Odpočet do zhasnutí. mode: restart → každý úspěšný sken ho posune,
+  # takže při skenování víc kusů nemusíš znovu sahat na tlačítko.
+  - id: scanner_timeout
+    mode: restart
+    then:
       - delay: ${active_window}
       - uart.write:                     # vypni skenování (tma)
           id: scanner_uart
@@ -290,6 +304,8 @@ text_sensor:
     icon: "mdi:barcode-scan"
     on_value:
       then:
+        # Každý úspěšný sken posune okno — můžeš pípat dál bez dotyku.
+        - script.execute: scanner_timeout
         - lambda: |-
             id(disp_title) = "Načteno";
             id(disp_sub) = x;
