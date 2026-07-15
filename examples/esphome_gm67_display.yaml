@@ -5,9 +5,15 @@
 #    a pak zase vypne. Využívá TX linku (GPIO7 → RX čtečky), co už vede.
 #  - SSD1306 128x64 I2C ukazuje stav + poslední produkt z HA.
 #
-# GM67 příkazy převzaty z funkční konfigurace MattFryer/HA-Mealie-Barcode-Scanner.
-# Firmware GM67 se liší — kdyby čtečka nereagovala, ověř rámce v jejím manuálu
-# (Hangzhou Grow GM67, Appendix „Serial Port Instruction").
+# Příkazy dle manuálu GM67 (Hangzhou Grow, V1.1) — Appendix 6, Table 6-1/6-2:
+#   Host mode      07 C6 04 08 00 8A 08 FE 95   (bez něj START/STOP_DECODE neplatí!)
+#   Single scan 20s 08 C6 04 08 00 F2 FA 0C FD 2E
+#   START_DECODE   04 E4 04 00 FF 14
+#   STOP_DECODE    04 E5 04 00 FF 13
+# Pozn.: v host mode se čtení po úspěšném dekódování samo ukončí → po každém
+# kódu posíláme START_DECODE znovu.
+# Kdyby opakovaný sken TÉHOŽ kódu nereagoval, vypni „Time Interval For The
+# Same Code Read" (manuál 4.6.1 „No delay") — default je 500 ms.
 #
 # !!! PŘED FLASHEM ZKONTROLUJ !!!
 #  - model/adresa displeje (128x64 / 0x3C)
@@ -32,13 +38,21 @@ esphome:
     priority: -100
     then:
       - delay: 2s            # počkej, až se GM67 nastartuje
-      # kontinuální režim + hned vypnout (čtečka je po startu tmavá)
+      # HOST MODE — bez něj GM67 ignoruje START_DECODE/STOP_DECODE
+      # (manuál 4.4 + Appendix 6: "the serial port command needs to be
+      #  valid in host mode. Please switch to the host mode first.")
       - uart.write:
           id: scanner_uart
-          data: [0x07, 0xC6, 0x04, 0x08, 0x00, 0x8A, 0x04, 0xFE, 0x99]
+          data: [0x07, 0xC6, 0x04, 0x08, 0x00, 0x8A, 0x08, 0xFE, 0x95]
+      # Single scan time 20 s = HW pojistka: i kdyby ESP umřelo,
+      # čtečka po 20 s sama zhasne. Drž stejně jako ${active_window}.
       - uart.write:
           id: scanner_uart
-          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
+          data: [0x08, 0xC6, 0x04, 0x08, 0x00, 0xF2, 0xFA, 0x0C, 0xFD, 0x2E]
+      # pro jistotu ukonči případné čtení → tma
+      - uart.write:
+          id: scanner_uart
+          data: [0x04, 0xE5, 0x04, 0x00, 0xFF, 0x13]
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -174,9 +188,9 @@ button:
     on_press:
       - script.stop: activate_scanner
       - script.stop: scanner_timeout
-      - uart.write:
+      - uart.write:                     # STOP_DECODE
           id: scanner_uart
-          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
+          data: [0x04, 0xE5, 0x04, 0x00, 0xFF, 0x13]
       - lambda: |-
           id(scanning) = false;
           id(disp_title) = "Rohlík EAN";
@@ -229,13 +243,13 @@ script:
     mode: single
     then:
       - lambda: 'id(scanning) = true;'
-      - uart.write:                     # probuď z případného spánku
+      - uart.write:                     # probuď ze spánku (libovolný bajt)
           id: scanner_uart
           data: [0x00]
       - delay: 60ms
-      - uart.write:                     # zapni skenování
+      - uart.write:                     # START_DECODE — spusť čtení
           id: scanner_uart
-          data: [0x04, 0xE9, 0x04, 0x00, 0xFF, 0x0F]
+          data: [0x04, 0xE4, 0x04, 0x00, 0xFF, 0x14]
 
   # Odpočet do zhasnutí. mode: restart → každý úspěšný sken ho posune,
   # takže při skenování víc kusů nemusíš znovu sahat na tlačítko.
@@ -243,9 +257,9 @@ script:
     mode: restart
     then:
       - delay: ${active_window}
-      - uart.write:                     # vypni skenování (tma)
+      - uart.write:                     # STOP_DECODE — ukonči čtení (tma)
           id: scanner_uart
-          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
+          data: [0x04, 0xE5, 0x04, 0x00, 0xFF, 0x13]
       - lambda: |-
           id(scanning) = false;
           id(disp_title) = "Rohlík EAN";
@@ -304,6 +318,11 @@ text_sensor:
     icon: "mdi:barcode-scan"
     on_value:
       then:
+        # V host mode se engine po úspěšném čtení sám zastaví → znovu
+        # nastartuj, ať jde pípat dál (i tentýž kód kvůli počtu kusů).
+        - uart.write:
+            id: scanner_uart
+            data: [0x04, 0xE4, 0x04, 0x00, 0xFF, 0x14]
         # Každý úspěšný sken posune okno — můžeš pípat dál bez dotyku.
         - script.execute: scanner_timeout
         - lambda: |-
