@@ -1,16 +1,18 @@
 # Fáze 2 — čtečka ESP32-C3 + GM67 + SSD1306 displej + dotykové tlačítko (TTP223)
 #
-# Rozšíření základní konfigurace o:
-#  - SSD1306 128x64 I2C displej (stav + poslední produkt z HA)
-#  - kapacitní dotyk TTP223: probudí čtečku na ${active_window}, pak vypne
-#  - spínání napájení GM67 vysokou stranou přes load-switch / MOSFET modul
+#  - GM67 se ovládá PŘES UART (žádný MOSFET): na startu se přepne do
+#    kontinuálního režimu a vypne; dotyk TTP223 ho zapne na ${active_window}
+#    a pak zase vypne. Využívá TX linku (GPIO7 → RX čtečky), co už vede.
+#  - SSD1306 128x64 I2C ukazuje stav + poslední produkt z HA.
 #
-# !!! PŘED FLASHEM ZKONTROLUJ (assumpce) !!!
-#  - model displeje (128x64 vs 128x32) a I2C adresu (0x3C obvykle)
-#  - piny níže (GPIO6/7 UART a GPIO8 LED jsou pevně obsazené)
+# GM67 příkazy převzaty z funkční konfigurace MattFryer/HA-Mealie-Barcode-Scanner.
+# Firmware GM67 se liší — kdyby čtečka nereagovala, ověř rámce v jejím manuálu
+# (Hangzhou Grow GM67, Appendix „Serial Port Instruction").
+#
+# !!! PŘED FLASHEM ZKONTROLUJ !!!
+#  - model/adresa displeje (128x64 / 0x3C)
+#  - piny (GPIO6/7 UART a GPIO8 LED jsou pevně obsazené)
 #  - TTP223 v momentovém režimu (výstup HIGH při dotyku) — default z výroby
-#  - napájení GM67 spínáno NA VCC (ne GND!), aby zůstala společná zem UARTu;
-#    GPIO HIGH = zapnuto (odpovídá běžnému load-switch modulu)
 
 substitutions:
   device_name: "rohlik-ctecka"
@@ -20,13 +22,23 @@ substitutions:
   i2c_sda: "GPIO4"
   i2c_scl: "GPIO5"
   touch_pin: "GPIO3"       # TTP223 OUT
-  power_pin: "GPIO10"      # gate load-switche napájení GM67 (HIGH = zapnuto)
   aggregation_window: "3s"
   active_window: "20s"     # jak dlouho po dotyku čtečka svítí/skenuje
 
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
+  on_boot:
+    priority: -100
+    then:
+      - delay: 2s            # počkej, až se GM67 nastartuje
+      # kontinuální režim + hned vypnout (čtečka je po startu tmavá)
+      - uart.write:
+          id: scanner_uart
+          data: [0x07, 0xC6, 0x04, 0x08, 0x00, 0x8A, 0x04, 0xFE, 0x99]
+      - uart.write:
+          id: scanner_uart
+          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -132,14 +144,6 @@ globals:
     restore_value: false
     initial_value: '"Přilož prst"'
 
-# Napájení GM67 (přes load-switch/MOSFET na VCC). ALWAYS_OFF = po startu tma.
-switch:
-  - platform: gpio
-    pin: ${power_pin}
-    id: scanner_power
-    internal: true
-    restore_mode: ALWAYS_OFF
-
 # Dotykové tlačítko TTP223 — probudí čtečku
 binary_sensor:
   - platform: gpio
@@ -152,6 +156,31 @@ binary_sensor:
       - delayed_on: 20ms
     on_press:
       - script.execute: activate_scanner
+
+button:
+  # Totéž co dotyk, ale z Home Assistantu (dashboard, automatizace, Assist)
+  - platform: template
+    name: "Aktivovat čtečku"
+    id: activate_btn
+    icon: "mdi:barcode-scan"
+    on_press:
+      - script.execute: activate_scanner
+
+  # Ruční vypnutí ještě před uplynutím okna
+  - platform: template
+    name: "Vypnout čtečku"
+    id: deactivate_btn
+    icon: "mdi:barcode-off"
+    on_press:
+      - script.stop: activate_scanner
+      - uart.write:
+          id: scanner_uart
+          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
+      - lambda: |-
+          id(scanning) = false;
+          id(disp_title) = "Rohlík EAN";
+          id(disp_sub) = "Přilož prst";
+      - component.update: oled
 
 font:
   - file: "gfonts://Roboto"
@@ -191,10 +220,18 @@ script:
     mode: restart
     then:
       - lambda: 'id(scanning) = true;'
-      - switch.turn_on: scanner_power
+      - uart.write:                     # probuď z případného spánku
+          id: scanner_uart
+          data: [0x00]
+      - delay: 60ms
+      - uart.write:                     # zapni skenování
+          id: scanner_uart
+          data: [0x04, 0xE9, 0x04, 0x00, 0xFF, 0x0F]
       - component.update: oled
       - delay: ${active_window}
-      - switch.turn_off: scanner_power
+      - uart.write:                     # vypni skenování (tma)
+          id: scanner_uart
+          data: [0x04, 0xEA, 0x04, 0x00, 0xFF, 0x0E]
       - lambda: |-
           id(scanning) = false;
           id(disp_title) = "Rohlík EAN";
